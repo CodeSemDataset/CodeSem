@@ -235,7 +235,7 @@ class BaseMetaDectector(object):
             right = self.ops["right_var"]
 
             d = tf.reduce_sum(tf.square(left - right), 1)
-            d_sqrt = tf.sqrt(d)
+            d_sqrt = tf.sqrt(tf.maximum(d, 1e-9))
 
             # labels: 1 if same, 0 if different
             loss = (1 - inputs["graph_labels"]) * tf.square(tf.maximum(0., self.params['margin'] - d_sqrt)) + inputs["graph_labels"] * d
