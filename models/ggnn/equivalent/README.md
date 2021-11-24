@@ -3,7 +3,7 @@
 ## Test the model
 
 ```
-python metaDetector.py -p 3
+python ggnnModel.py -p 3
 ```
 training arguments:  
 ```

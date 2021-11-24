@@ -11,7 +11,7 @@ import argparse
 import copy
 import random
 
-from baseMetaDectector import BaseMetaDectector
+from baseGGNNModel import BaseMetaDectector
 from utils import MLP, glorot_init, SMALL_NUMBER
 
 
@@ -104,6 +104,10 @@ class MetaDectector(BaseMetaDectector):
         self.weights['MLP_gate_node_mask'] = MLP(4 * self.params['hidden_size'], 1, [], self.placeholders['out_layer_dropout_keep_prob'])
         self.weights['MLP_nodes_node_mask'] = MLP(2 * self.params['hidden_size'], 2 * self.params['hidden_size'], [], self.placeholders['out_layer_dropout_keep_prob'])
         self.weights['MLP_graphs_node_mask'] = MLP(2 * self.params['hidden_size'], self.params['vocabulary_size'], [], self.placeholders['out_layer_dropout_keep_prob'])
+
+        self.weights['MLP_gate_alias'] = MLP(4 * self.params['hidden_size'], 1, [], self.placeholders['out_layer_dropout_keep_prob'])
+        self.weights['MLP_nodes_alias'] = MLP(2 * self.params['hidden_size'], 2 * self.params['hidden_size'], [], self.placeholders['out_layer_dropout_keep_prob'])
+        self.weights['MLP_graphs_alias'] = MLP(2 * self.params['hidden_size'], self.params['hidden_size'], [], self.placeholders['out_layer_dropout_keep_prob'])
 
 
     def compute_final_node_representations(self, inputs) -> tf.Tensor:
@@ -244,119 +248,85 @@ class MetaDectector(BaseMetaDectector):
         gate_input = tf.concat([mask_node_input, neighbor_node_input], axis=-1)    # [g x 4h]
         last_h = tf.concat([mask_node, tf.unsorted_segment_mean(data=neighbor_node, segment_ids=inputs['neighbor_node_graph_relation'], num_segments=inputs['num_graphs'])], axis=-1)   # [g x 2h]
         gated_outputs = tf.nn.sigmoid(self.weights['MLP_gate_node_mask'](gate_input)) * self.weights['MLP_nodes_node_mask'](last_h)  # [g x 2h]
-        node_type = self.weights['MLP_graphs_node_mask'](gated_outputs)        # [g x (vocabulary_size - 1)]
+        node_type = self.weights['MLP_graphs_node_mask'](gated_outputs)        # [g x vocabulary_size]
         return node_type
+
+    def compute_alias(self, inputs, def_node, use_nodes):
+        initial_def_node = tf.nn.embedding_lookup(params=self.weights['embedding_matrix'], ids=tf.nn.embedding_lookup(params=inputs['node_indices_for_embedding'], ids=inputs["def_node"]))
+        initial_use_nodes = tf.nn.embedding_lookup(params=self.weights['embedding_matrix'], ids=tf.nn.embedding_lookup(params=inputs['node_indices_for_embedding'], ids=inputs["use_nodes"]))    # [ng x h]
+        def_node_input = tf.concat([def_node, initial_def_node], axis=-1)     # [2g x 2h]
+        use_nodes_input = tf.concat([use_nodes, initial_use_nodes], axis=-1)     # [ng x 2h]
+        use_nodes_input = tf.unsorted_segment_mean(data=use_nodes_input, segment_ids=inputs['use_nodes_graph_relation'], num_segments=(inputs['num_graphs'] * 2))  # [2g x 2h]
+        gate_input = tf.concat([def_node_input, use_nodes_input], axis=-1)    # [2g x 4h]
+        last_h = tf.concat([def_node, tf.unsorted_segment_mean(data=use_nodes, segment_ids=inputs['use_nodes_graph_relation'], num_segments=(inputs['num_graphs'] * 2))], axis=-1)   # [2g x 2h]
+        gated_outputs = tf.nn.sigmoid(self.weights['MLP_gate_alias'](gate_input)) * self.weights['MLP_nodes_alias'](last_h)  # [2g x 2h]
+        defuse_represenation = self.weights['MLP_graphs_alias'](gated_outputs)        # [2g x hidden_size]
+        return defuse_represenation[1::2], defuse_represenation[::2]
 
     def process_raw_graphs(self, raw_data: Sequence[Any], test_percentage, train_step) -> Any:
         training_graphs = []
         test_graphs = []
-        for input_data in raw_data:
+        for one_data in raw_data:
             processed_data = []
+            # mask edge in pre_train-edge-mask
+            mask_node = [0, 0]
+            mask_edge_original_type = 0
+            if train_step == "pre-train_edge_mask":
+                mask_edge_idx = random.randint(0, len(one_data["graph"]) - 1)
+                mask_edge = one_data["graph"][mask_edge_idx]
 
-            if train_step == "pre-train_edge_mask" or train_step == "pre-train_node_mask":
-                # mask edge in pre_train-edge-mask
-                one_data = input_data
-                mask_node = [0, 0]
-                mask_edge_original_type = 0
-                if train_step == "pre-train_edge_mask":
-                    mask_edge_idx = random.randint(0, len(one_data["graph"]) - 1)
-                    mask_edge = one_data["graph"][mask_edge_idx]
+                mask_edge_original_type = int(mask_edge[1]) - 1
+                mask_node = []
+                mask_node.append(int(mask_edge[0]))
+                mask_node.append(int(mask_edge[2]))
 
-                    mask_edge_original_type = int(mask_edge[1]) - 1
-                    mask_node = []
-                    mask_node.append(int(mask_edge[0]))
-                    mask_node.append(int(mask_edge[2]))
+                mask_edge_type = int(self.num_edge_types) - 1
+                mask_edge = [mask_edge[0], mask_edge_type, mask_edge[2]]
+                one_data["graph"][mask_edge_idx] = mask_edge
 
-                    mask_edge_type = int(self.num_edge_types) - 1
-                    mask_edge = [mask_edge[0], mask_edge_type, mask_edge[2]]
-                    one_data["graph"][mask_edge_idx] = mask_edge
+            # mask node in pre_train-node-mask
+            mask_node_idx = 0
+            mask_node_original_embedding = 0
+            mask_node_neighbor_node_list = []
+            if train_step == "pre-train_node_mask":
+                mask_node_idx = random.randint(0, len(one_data["node_features"]) - 1)
+                mask_node_original_embedding = int(one_data["node_features"][mask_node_idx])
+                mask_node_embedding = self.params['vocabulary_size']
+                one_data["node_features"][mask_node_idx] = mask_node_embedding
+                mask_node_neighbor_node_list.extend([int(e[2]) for e in one_data["graph"] if int(e[0]) == mask_node_idx])
+                mask_node_neighbor_node_list.extend([int(e[0]) for e in one_data["graph"] if int(e[2]) == mask_node_idx])
 
-                # mask node in pre_train-node-mask
-                mask_node_idx = 0
-                mask_node_original_embedding = 0
-                mask_node_neighbor_node_list = []
-                if train_step == "pre-train_node_mask":
-                    mask_node_idx = random.randint(0, len(one_data["node_features"]) - 1)
-                    mask_node_original_embedding = int(one_data["node_features"][mask_node_idx])
-                    mask_node_embedding = self.params['vocabulary_size']
-                    one_data["node_features"][mask_node_idx] = mask_node_embedding
-                    mask_node_neighbor_node_list.extend([int(e[2]) for e in one_data["graph"] if int(e[0]) == mask_node_idx])
-                    mask_node_neighbor_node_list.extend([int(e[0]) for e in one_data["graph"] if int(e[2]) == mask_node_idx])
+            # fine tune data
+            labels = 0
+            def_node = [0, 0]
+            use_nodes = [[0], [0]]
+            if train_step == "fine-tune":
+                labels = one_data["labels"]
+                def_node = [one_data["var1_def"], one_data["var2_def"]]
+                use_nodes = [one_data["var1_use"], one_data["var2_use"]]
 
-                (
-                    adjacency_lists,
-                    num_incoming_edge_per_type,
-                ) = self.__graph_to_adjacency_lists(one_data["graph"])
-                processed_data.append(
-                    {
-                        "adjacency_lists": adjacency_lists,
-                        "num_incoming_edge_per_type": num_incoming_edge_per_type,
-                        "embedding_indices": one_data["node_features"],
-                        "name": one_data["projName"],
-                        "mask_node": mask_node,
-                        "mask_edge_original_type": mask_edge_original_type,
-                        "mask_node_idx": mask_node_idx,
-                        "mask_node_original_embedding": mask_node_original_embedding,
-                        "mask_node_neighbor_node_list": mask_node_neighbor_node_list
-                    }
-                )
+            (
+                adjacency_lists,
+                num_incoming_edge_per_type,
+            ) = self.__graph_to_adjacency_lists(one_data["graph"])
+            processed_data.append(
+                {
+                    "adjacency_lists": adjacency_lists,
+                    "num_incoming_edge_per_type": num_incoming_edge_per_type,
+                    "embedding_indices": one_data["node_features"],
+                    "name": one_data["projName"],
+                    "labels": labels,
+                    "def_node": def_node,
+                    "use_nodes": use_nodes,
+                    "mask_node": mask_node,
+                    "mask_edge_original_type": mask_edge_original_type,
+                    "mask_node_idx": mask_node_idx,
+                    "mask_node_original_embedding": mask_node_original_embedding,
+                    "mask_node_neighbor_node_list": mask_node_neighbor_node_list
+                }
+            )
 
-            else:
-                one_data = input_data["func1"]
-                # mask edge in pre_train-edge-mask
-                mask_node = [0, 0]
-                mask_edge_original_type = 0
-                # mask node in pre_train-node-mask
-                mask_node_idx = 0
-                mask_node_original_embedding = 0
-                mask_node_neighbor_node_list = []
-                (
-                    adjacency_lists,
-                    num_incoming_edge_per_type,
-                ) = self.__graph_to_adjacency_lists(one_data["graph"])
-                processed_data.append(
-                    {
-                        "adjacency_lists": adjacency_lists,
-                        "num_incoming_edge_per_type": num_incoming_edge_per_type,
-                        "embedding_indices": one_data["node_features"],
-                        "name": one_data["projName"],
-                        "mask_node": mask_node,
-                        "mask_edge_original_type": mask_edge_original_type,
-                        "mask_node_idx": mask_node_idx,
-                        "mask_node_original_embedding": mask_node_original_embedding,
-                        "mask_node_neighbor_node_list": mask_node_neighbor_node_list
-                    }
-                )
-
-                one_data = input_data["func2"]
-                # mask edge in pre_train-edge-mask
-                mask_node = [0, 0]
-                mask_edge_original_type = 0
-                # mask node in pre_train-node-mask
-                mask_node_idx = 0
-                mask_node_original_embedding = 0
-                mask_node_neighbor_node_list = []
-                (
-                    adjacency_lists,
-                    num_incoming_edge_per_type,
-                ) = self.__graph_to_adjacency_lists(one_data["graph"])
-                processed_data.append(
-                    {
-                        "adjacency_lists": adjacency_lists,
-                        "num_incoming_edge_per_type": num_incoming_edge_per_type,
-                        "embedding_indices": one_data["node_features"],
-                        "name": one_data["projName"],
-                        "mask_node": mask_node,
-                        "mask_edge_original_type": mask_edge_original_type,
-                        "mask_node_idx": mask_node_idx,
-                        "mask_node_original_embedding": mask_node_original_embedding,
-                        "mask_node_neighbor_node_list": mask_node_neighbor_node_list
-                    }
-                )
-
-                processed_data.append(input_data["labels"])
-
-            (test_graphs if random.randint(0,9) < int(test_percentage) else training_graphs).append(
+            (test_graphs if random.randint(0,9) < int(test_percentage) else training_graphs).extend(
                 processed_data
             )
 
@@ -395,219 +365,98 @@ class MetaDectector(BaseMetaDectector):
         if is_training:
             np.random.shuffle(data)
 
-        if len(data[0]) == 3:
+        num_graphs_in_total_batch = 0
 
-            num_pairs_in_total_batch = 0
+        cur_graph = data[0]
+        while num_graphs_in_total_batch < len(data):
+            num_graphs_in_batch = 0
+            batch_node_indices_in_embedding_matrix = []
+            batch_adjacency_lists = [[] for _ in range(self.num_edge_types)]
+            batch_num_incoming_edges_per_type = []
+            batch_graph_nodes_list = []
+            node_offset = 0
+            batch_graph_labels = []
+            batch_graph_def_node = []
+            batch_graph_use_nodes = []
+            batch_graph_use_nodes_graph_relation = []
 
-            one_pair = data[0]
-            while num_pairs_in_total_batch < len(data):
-                num_graphs_in_batch = 0
-                batch_node_indices_in_embedding_matrix = []
-                batch_adjacency_lists = [[] for _ in range(self.num_edge_types)]
-                batch_num_incoming_edges_per_type = []
-                batch_graph_nodes_list = []
-                node_offset = 0
-                batch_graph_labels = []
-                batch_pair_idx = []
+            # for pre train edge mask
+            batch_graph_mask_node_list = []
+            batch_graph_mask_edge_original_type_list = []
 
-                # for pre train edge mask
-                batch_graph_mask_node_list = []
-                batch_graph_mask_edge_original_type_list = []
+            # for pre train node mask
+            batch_graph_mask_node_idx_list = []
+            batch_graph_mask_node_original_embedding = []
+            batch_graph_mask_node_neighbor_node_list = []
+            batch_graph_neighbor_node_graph_relation = []
+            while (num_graphs_in_total_batch < len(data) and node_offset + len(cur_graph["embedding_indices"]) < self.params["batch_size"]):
+                batch_graph_labels.append(int(cur_graph["labels"]))
+                batch_graph_def_node.extend([int(n) + node_offset for n in cur_graph["def_node"]])
+                batch_graph_use_nodes.extend([int(n) + node_offset for n in cur_graph["use_nodes"][0]])
+                batch_graph_use_nodes_graph_relation.extend(np.full(shape=[len(cur_graph["use_nodes"][0])], fill_value=num_graphs_in_batch * 2, dtype=np.int32))
+                batch_graph_use_nodes.extend([int(n) + node_offset for n in cur_graph["use_nodes"][1]])
+                batch_graph_use_nodes_graph_relation.extend(np.full(shape=[len(cur_graph["use_nodes"][1])], fill_value=num_graphs_in_batch * 2 + 1, dtype=np.int32))
+                batch_graph_mask_node_list.append([n + node_offset for n in cur_graph["mask_node"]])
+                batch_graph_mask_edge_original_type_list.append(cur_graph["mask_edge_original_type"])
+                batch_graph_mask_node_idx_list.append(node_offset + cur_graph["mask_node_idx"])
+                batch_graph_mask_node_original_embedding.append(cur_graph["mask_node_original_embedding"])
+                batch_graph_mask_node_neighbor_node_list.extend([n + node_offset for n in cur_graph["mask_node_neighbor_node_list"]])
+                batch_graph_neighbor_node_graph_relation.extend(np.full(shape=[len(cur_graph["mask_node_neighbor_node_list"])], fill_value=num_graphs_in_batch, dtype=np.int32))
 
-                # for pre train node mask
-                batch_graph_mask_node_idx_list = []
-                batch_graph_mask_node_original_embedding = []
-                batch_graph_mask_node_neighbor_node_list = []
-                batch_graph_neighbor_node_graph_relation = []
-
-                while num_pairs_in_total_batch < len(data) and node_offset + len(one_pair[0]["embedding_indices"]) + len(one_pair[1]["embedding_indices"]) < self.params["batch_size"]:
-                    func1_graph = one_pair[0]
-                    func2_graph = one_pair[1]
-                    pair_label = one_pair[2]
-                    batch_graph_labels.append(int(pair_label))
-                    graph_idx = []
-
-                    # for func1
-                    batch_graph_mask_node_list.append([n + node_offset for n in func1_graph["mask_node"]])
-                    batch_graph_mask_edge_original_type_list.append(func1_graph["mask_edge_original_type"])
-                    batch_graph_mask_node_idx_list.append(node_offset + func1_graph["mask_node_idx"])
-                    batch_graph_mask_node_original_embedding.append(func1_graph["mask_node_original_embedding"])
-                    batch_graph_mask_node_neighbor_node_list.extend([n + node_offset for n in func1_graph["mask_node_neighbor_node_list"]])
-                    batch_graph_neighbor_node_graph_relation.extend(np.full(shape=[len(func1_graph["mask_node_neighbor_node_list"])], fill_value=num_graphs_in_batch, dtype=np.int32))
-
-                    num_nodes_in_graph = len(func1_graph['embedding_indices'])
-                    batch_node_indices_in_embedding_matrix.extend(func1_graph['embedding_indices'])
-                    batch_graph_nodes_list.append(np.full(shape=[num_nodes_in_graph], fill_value=num_graphs_in_batch, dtype=np.int32))
-                    for i in range(self.num_edge_types):
-                        if i in func1_graph['adjacency_lists']:
-                            batch_adjacency_lists[i].append(func1_graph['adjacency_lists'][i] + node_offset)
-
-                    # Turn counters for incoming edges into np array:
-                    num_incoming_edges_per_type = np.zeros((num_nodes_in_graph, self.num_edge_types))
-                    for (e_type, num_incoming_edges_per_type_dict) in func1_graph['num_incoming_edge_per_type'].items():
-                        for (node_id, edge_count) in num_incoming_edges_per_type_dict.items():
-                            num_incoming_edges_per_type[node_id, e_type] = edge_count
-                    batch_num_incoming_edges_per_type.append(num_incoming_edges_per_type)
-
-                    graph_idx.append(num_graphs_in_batch)
-                    num_graphs_in_batch += 1
-                    node_offset += num_nodes_in_graph
-
-
-                    # for func2
-                    batch_graph_mask_node_list.append([n + node_offset for n in func2_graph["mask_node"]])
-                    batch_graph_mask_edge_original_type_list.append(func2_graph["mask_edge_original_type"])
-                    batch_graph_mask_node_idx_list.append(node_offset + func2_graph["mask_node_idx"])
-                    batch_graph_mask_node_original_embedding.append(func2_graph["mask_node_original_embedding"])
-                    batch_graph_mask_node_neighbor_node_list.extend([n + node_offset for n in func2_graph["mask_node_neighbor_node_list"]])
-                    batch_graph_neighbor_node_graph_relation.extend(np.full(shape=[len(func2_graph["mask_node_neighbor_node_list"])], fill_value=num_graphs_in_batch, dtype=np.int32))
-
-                    num_nodes_in_graph = len(func2_graph['embedding_indices'])
-                    batch_node_indices_in_embedding_matrix.extend(func2_graph['embedding_indices'])
-                    batch_graph_nodes_list.append(np.full(shape=[num_nodes_in_graph], fill_value=num_graphs_in_batch, dtype=np.int32))
-                    for i in range(self.num_edge_types):
-                        if i in func2_graph['adjacency_lists']:
-                            batch_adjacency_lists[i].append(func2_graph['adjacency_lists'][i] + node_offset)
-
-                    # Turn counters for incoming edges into np array:
-                    num_incoming_edges_per_type = np.zeros((num_nodes_in_graph, self.num_edge_types))
-                    for (e_type, num_incoming_edges_per_type_dict) in func2_graph['num_incoming_edge_per_type'].items():
-                        for (node_id, edge_count) in num_incoming_edges_per_type_dict.items():
-                            num_incoming_edges_per_type[node_id, e_type] = edge_count
-                    batch_num_incoming_edges_per_type.append(num_incoming_edges_per_type)
-
-                    graph_idx.append(num_graphs_in_batch)
-                    batch_pair_idx.append(graph_idx)
-                    num_graphs_in_batch += 1
-                    node_offset += num_nodes_in_graph
-
-                    num_pairs_in_total_batch += 1
-                    one_pair = (
-                        data[num_pairs_in_total_batch]
-                        if num_pairs_in_total_batch < len(data)
-                        else None
-                    )
-
-                batch_feed_dict = {
-                    self.placeholders['input_node_indices_for_embedding']: batch_node_indices_in_embedding_matrix,
-                    self.placeholders['input_num_incoming_edges_per_type']: np.concatenate(batch_num_incoming_edges_per_type, axis=0),
-                    self.placeholders['input_graph_nodes_list']: np.concatenate(batch_graph_nodes_list),
-                    self.placeholders['input_num_graphs']: num_graphs_in_batch,
-                    self.placeholders['input_graph_labels']: batch_graph_labels,
-                    self.placeholders['input_pair_idx']: batch_pair_idx,
-                    self.placeholders['input_mask_node_list']: batch_graph_mask_node_list,
-                    self.placeholders['input_mask_edge_original_type_list']: batch_graph_mask_edge_original_type_list,
-                    self.placeholders['input_mask_node_idx_list']: batch_graph_mask_node_idx_list,
-                    self.placeholders['input_mask_node_original_embedding']: batch_graph_mask_node_original_embedding,
-                    self.placeholders['input_mask_node_neighbor_node_list']: batch_graph_mask_node_neighbor_node_list,
-                    self.placeholders['input_neighbor_node_graph_relation']: batch_graph_neighbor_node_graph_relation
-                }
-
-                # Merge adjacency lists and information about incoming nodes:
+                num_nodes_in_graph = len(cur_graph['embedding_indices'])
+                batch_node_indices_in_embedding_matrix.extend(cur_graph['embedding_indices'])
+                batch_graph_nodes_list.append(np.full(shape=[num_nodes_in_graph], fill_value=num_graphs_in_batch, dtype=np.int32))
                 for i in range(self.num_edge_types):
-                    if len(batch_adjacency_lists[i]) > 0:
-                        adj_list = np.concatenate(batch_adjacency_lists[i])
-                    else:
-                        adj_list = np.zeros((0, 2), dtype=np.int32)
-                    batch_feed_dict[self.placeholders['input_adjacency_lists'][i]] = adj_list
-                batch_feed_dict[self.placeholders['graph_state_dropout_keep_prob']] = graph_state_dropout_keep_prob,
-                batch_feed_dict[self.placeholders['edge_weight_dropout_keep_prob']] = edge_weights_dropout_keep_prob,
-                batch_feed_dict[self.placeholders['out_layer_dropout_keep_prob']] = out_layer_dropout_keep_prob,
+                    if i in cur_graph['adjacency_lists']:
+                        batch_adjacency_lists[i].append(cur_graph['adjacency_lists'][i] + node_offset)
 
-                yield batch_feed_dict
+                # Turn counters for incoming edges into np array:
+                num_incoming_edges_per_type = np.zeros((num_nodes_in_graph, self.num_edge_types))
+                for (e_type, num_incoming_edges_per_type_dict) in cur_graph['num_incoming_edge_per_type'].items():
+                    for (node_id, edge_count) in num_incoming_edges_per_type_dict.items():
+                        num_incoming_edges_per_type[node_id, e_type] = edge_count
+                batch_num_incoming_edges_per_type.append(num_incoming_edges_per_type)
 
-        else:
-            num_graphs_in_total_batch = 0
+                num_graphs_in_batch += 1
+                num_graphs_in_total_batch += 1
+                node_offset += num_nodes_in_graph
 
-            cur_graph = data[0][0]
-            while num_graphs_in_total_batch < len(data):
-                num_graphs_in_batch = 0
-                batch_node_indices_in_embedding_matrix = []
-                batch_adjacency_lists = [[] for _ in range(self.num_edge_types)]
-                batch_num_incoming_edges_per_type = []
-                batch_graph_nodes_list = []
-                node_offset = 0
-                batch_graph_labels = []
-                batch_pair_idx = []
+                cur_graph = (
+                    data[num_graphs_in_total_batch]
+                    if num_graphs_in_total_batch < len(data)
+                    else None
+                )
 
-                # for pre train edge mask
-                batch_graph_mask_node_list = []
-                batch_graph_mask_edge_original_type_list = []
+            batch_feed_dict = {
+                self.placeholders['input_node_indices_for_embedding']: batch_node_indices_in_embedding_matrix,
+                self.placeholders['input_num_incoming_edges_per_type']: np.concatenate(batch_num_incoming_edges_per_type, axis=0),
+                self.placeholders['input_graph_nodes_list']: np.concatenate(batch_graph_nodes_list),
+                self.placeholders['input_num_graphs']: num_graphs_in_batch,
+                self.placeholders['input_graph_labels']: batch_graph_labels,
+                self.placeholders['input_def_node']: batch_graph_def_node,
+                self.placeholders['input_use_nodes']: batch_graph_use_nodes,
+                self.placeholders['input_use_nodes_graph_relation']: batch_graph_use_nodes_graph_relation,
+                self.placeholders['input_mask_node_list']: batch_graph_mask_node_list,
+                self.placeholders['input_mask_edge_original_type_list']: batch_graph_mask_edge_original_type_list,
+                self.placeholders['input_mask_node_idx_list']: batch_graph_mask_node_idx_list,
+                self.placeholders['input_mask_node_original_embedding']: batch_graph_mask_node_original_embedding,
+                self.placeholders['input_mask_node_neighbor_node_list']: batch_graph_mask_node_neighbor_node_list,
+                self.placeholders['input_neighbor_node_graph_relation']: batch_graph_neighbor_node_graph_relation
+            }
 
-                # for pre train node mask
-                batch_graph_mask_node_idx_list = []
-                batch_graph_mask_node_original_embedding = []
-                batch_graph_mask_node_neighbor_node_list = []
-                batch_graph_neighbor_node_graph_relation = []
+            # Merge adjacency lists and information about incoming nodes:
+            for i in range(self.num_edge_types):
+                if len(batch_adjacency_lists[i]) > 0:
+                    adj_list = np.concatenate(batch_adjacency_lists[i])
+                else:
+                    adj_list = np.zeros((0, 2), dtype=np.int32)
+                batch_feed_dict[self.placeholders['input_adjacency_lists'][i]] = adj_list
 
-                while (num_graphs_in_total_batch < len(data) and node_offset + len(cur_graph["embedding_indices"]) < self.params["batch_size"]):
-                    batch_graph_labels.append(0)
-                    graph_idx = []
+            batch_feed_dict[self.placeholders['graph_state_dropout_keep_prob']] = graph_state_dropout_keep_prob,
+            batch_feed_dict[self.placeholders['edge_weight_dropout_keep_prob']] = edge_weights_dropout_keep_prob,
+            batch_feed_dict[self.placeholders['out_layer_dropout_keep_prob']] = out_layer_dropout_keep_prob,
 
-                    batch_graph_mask_node_list.append([n + node_offset for n in cur_graph["mask_node"]])
-                    batch_graph_mask_edge_original_type_list.append(cur_graph["mask_edge_original_type"])
-                    batch_graph_mask_node_idx_list.append(node_offset + cur_graph["mask_node_idx"])
-                    batch_graph_mask_node_original_embedding.append(cur_graph["mask_node_original_embedding"])
-                    batch_graph_mask_node_neighbor_node_list.extend([n + node_offset for n in cur_graph["mask_node_neighbor_node_list"]])
-                    batch_graph_neighbor_node_graph_relation.extend(np.full(shape=[len(cur_graph["mask_node_neighbor_node_list"])], fill_value=num_graphs_in_batch, dtype=np.int32))
-
-                    num_nodes_in_graph = len(cur_graph['embedding_indices'])
-                    batch_node_indices_in_embedding_matrix.extend(cur_graph['embedding_indices'])
-                    batch_graph_nodes_list.append(np.full(shape=[num_nodes_in_graph], fill_value=num_graphs_in_batch, dtype=np.int32))
-                    for i in range(self.num_edge_types):
-                        if i in cur_graph['adjacency_lists']:
-                            batch_adjacency_lists[i].append(cur_graph['adjacency_lists'][i] + node_offset)
-
-                    # Turn counters for incoming edges into np array:
-                    num_incoming_edges_per_type = np.zeros((num_nodes_in_graph, self.num_edge_types))
-                    for (e_type, num_incoming_edges_per_type_dict) in cur_graph['num_incoming_edge_per_type'].items():
-                        for (node_id, edge_count) in num_incoming_edges_per_type_dict.items():
-                            num_incoming_edges_per_type[node_id, e_type] = edge_count
-                    batch_num_incoming_edges_per_type.append(num_incoming_edges_per_type)
-
-                    graph_idx.append(num_graphs_in_batch)
-                    batch_pair_idx.append([0, 0])
-                    num_graphs_in_batch += 1
-                    node_offset += num_nodes_in_graph
-
-                    num_graphs_in_total_batch += 1
-                    cur_graph = (
-                        data[num_graphs_in_total_batch][0]
-                        if num_graphs_in_total_batch < len(data)
-                        else None
-                    )
-
-
-
-                batch_feed_dict = {
-                    self.placeholders['input_node_indices_for_embedding']: batch_node_indices_in_embedding_matrix,
-                    self.placeholders['input_num_incoming_edges_per_type']: np.concatenate(batch_num_incoming_edges_per_type, axis=0),
-                    self.placeholders['input_graph_nodes_list']: np.concatenate(batch_graph_nodes_list),
-                    self.placeholders['input_num_graphs']: num_graphs_in_batch,
-                    self.placeholders['input_graph_labels']: batch_graph_labels,
-                    self.placeholders['input_pair_idx']: batch_pair_idx,
-                    self.placeholders['input_mask_node_list']: batch_graph_mask_node_list,
-                    self.placeholders['input_mask_edge_original_type_list']: batch_graph_mask_edge_original_type_list,
-                    self.placeholders['input_mask_node_idx_list']: batch_graph_mask_node_idx_list,
-                    self.placeholders['input_mask_node_original_embedding']: batch_graph_mask_node_original_embedding,
-                    self.placeholders['input_mask_node_neighbor_node_list']: batch_graph_mask_node_neighbor_node_list,
-                    self.placeholders['input_neighbor_node_graph_relation']: batch_graph_neighbor_node_graph_relation
-                }
-
-                # Merge adjacency lists and information about incoming nodes:
-                for i in range(self.num_edge_types):
-                    if len(batch_adjacency_lists[i]) > 0:
-                        adj_list = np.concatenate(batch_adjacency_lists[i])
-                    else:
-                        adj_list = np.zeros((0, 2), dtype=np.int32)
-                    batch_feed_dict[self.placeholders['input_adjacency_lists'][i]] = adj_list
-                batch_feed_dict[self.placeholders['graph_state_dropout_keep_prob']] = graph_state_dropout_keep_prob,
-                batch_feed_dict[self.placeholders['edge_weight_dropout_keep_prob']] = edge_weights_dropout_keep_prob,
-                batch_feed_dict[self.placeholders['out_layer_dropout_keep_prob']] = out_layer_dropout_keep_prob,
-
-                yield batch_feed_dict
-
-
+            yield batch_feed_dict
 
 def main():
     try:
@@ -615,7 +464,7 @@ def main():
         parser.add_argument("--restore", "-r", help="restore model parameters")
         parser.add_argument("--percentage", "-p", help="percentage of test batch(1-9)")
         parser.add_argument("--test_file", "-tf", help="the test file path")
-        parser.add_argument("--two_steps_training", "-t", action="store_true", help="training the model with two data, precise and imprecise")
+
         args = parser.parse_args()
 
         model = MetaDectector(args)

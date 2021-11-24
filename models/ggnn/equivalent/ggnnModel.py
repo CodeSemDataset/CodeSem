@@ -1,4 +1,3 @@
-
 from typing import Tuple, Dict, Sequence, Any
 
 from collections import defaultdict, namedtuple
@@ -12,7 +11,7 @@ import argparse
 import copy
 import random
 
-from baseMetaDectector import BaseMetaDectector
+from baseGGNNModel import BaseMetaDectector
 from utils import MLP, glorot_init, SMALL_NUMBER
 
 
@@ -47,10 +46,7 @@ class MetaDectector(BaseMetaDectector):
             'graph_state_dropout_keep_prob': .9,
             'edge_weight_dropout_keep_prob': .8,
 
-            'out_layer_dropout_keep_prob': .9,
-
-            # for rnn
-            'rnn_number_layers': 2,
+            'out_layer_dropout_keep_prob': .9
         })
         return params
 
@@ -66,8 +62,6 @@ class MetaDectector(BaseMetaDectector):
             raise Exception("Unknown activation function type '%s'." % activation_name)
 
         self.gnn_weights = GGNNWeights([], [], [], [])
-        self.rnns_fwd = []
-        self.rnns_bwd = []
         for layer_idx in range(len(self.params['layer_timesteps'])):
             with tf.variable_scope('gnn_layer_%i' % layer_idx):
                 edge_weights = tf.Variable(glorot_init([self.num_edge_types * h_dim, h_dim]),
@@ -99,11 +93,6 @@ class MetaDectector(BaseMetaDectector):
                                                      state_keep_prob=self.placeholders['graph_state_dropout_keep_prob'])
                 self.gnn_weights.rnn_cells.append(cell)
 
-        for layer_idx in range(self.params['rnn_number_layers']):
-            with tf.variable_scope('rnn_layer_%i' % layer_idx):
-                self.rnns_fwd.append(tf.keras.layers.GRU(h_dim//2, return_sequences=True))
-                self.rnns_bwd.append(tf.keras.layers.GRU(h_dim//2, return_sequences=True, go_backwards=True))
-
         self.weights['MLP_gate'] = MLP(2 * self.params['hidden_size'], 1, [], self.placeholders['out_layer_dropout_keep_prob'])
         self.weights['MLP_nodes'] = MLP(self.params['hidden_size'], self.params['hidden_size'], [], self.placeholders['out_layer_dropout_keep_prob'])
         self.weights['MLP_graphs'] = MLP(self.params['hidden_size'], self.params['hidden_size'], [], self.placeholders['out_layer_dropout_keep_prob'])
@@ -117,10 +106,10 @@ class MetaDectector(BaseMetaDectector):
         self.weights['MLP_graphs_node_mask'] = MLP(2 * self.params['hidden_size'], self.params['vocabulary_size'], [], self.placeholders['out_layer_dropout_keep_prob'])
 
 
-    def compute_node_representations_with_ggnn(self, initial_node_representation, inputs) -> tf.Tensor:
+    def compute_final_node_representations(self, inputs) -> tf.Tensor:
         node_states_per_layer = []  # one entry per layer (final state of that layer), shape: number of nodes in batch v x D
-        # initial_node_representation = tf.nn.embedding_lookup(params=self.weights['embedding_matrix'],
-        #                                                      ids=inputs['node_indices_for_embedding'])
+        initial_node_representation = tf.nn.embedding_lookup(params=self.weights['embedding_matrix'],
+                                                             ids=inputs['node_indices_for_embedding'])
         node_states_per_layer.append(initial_node_representation)
         num_nodes = tf.shape(initial_node_representation, out_type=tf.int32)[0]
 
@@ -222,15 +211,6 @@ class MetaDectector(BaseMetaDectector):
 
         return node_states_per_layer[-1]
 
-    def compute_node_representations_with_rnn(self, initial_node_representation, inputs) -> tf.Tensor:
-        initial_node_representation = tf.expand_dims(initial_node_representation, 1)
-        for layer_no in range(self.params['rnn_number_layers']):
-            fwd = self.rnns_fwd[layer_no](initial_node_representation)
-            bwd = self.rnns_bwd[layer_no](initial_node_representation)
-            states = tf.concat([fwd, bwd], axis=-1)
-            states = tf.nn.dropout(states, rate=(1 - self.placeholders['graph_state_dropout_keep_prob']))
-        return tf.squeeze(states, [1])
-
     def gated_regression(self, inputs, last_h):
         # last_h: [v x h]
         initial_node_representation = tf.nn.embedding_lookup(params=self.weights['embedding_matrix'], ids=inputs['node_indices_for_embedding'])
@@ -281,10 +261,12 @@ class MetaDectector(BaseMetaDectector):
                 if train_step == "pre-train_edge_mask":
                     mask_edge_idx = random.randint(0, len(one_data["graph"]) - 1)
                     mask_edge = one_data["graph"][mask_edge_idx]
+
                     mask_edge_original_type = int(mask_edge[1]) - 1
                     mask_node = []
                     mask_node.append(int(mask_edge[0]))
                     mask_node.append(int(mask_edge[2]))
+
                     mask_edge_type = int(self.num_edge_types) - 1
                     mask_edge = [mask_edge[0], mask_edge_type, mask_edge[2]]
                     one_data["graph"][mask_edge_idx] = mask_edge
@@ -304,7 +286,6 @@ class MetaDectector(BaseMetaDectector):
                 (
                     adjacency_lists,
                     num_incoming_edge_per_type,
-
                 ) = self.__graph_to_adjacency_lists(one_data["graph"])
                 processed_data.append(
                     {
@@ -319,6 +300,7 @@ class MetaDectector(BaseMetaDectector):
                         "mask_node_neighbor_node_list": mask_node_neighbor_node_list
                     }
                 )
+
             else:
                 one_data = input_data["func1"]
                 # mask edge in pre_train-edge-mask
@@ -414,6 +396,7 @@ class MetaDectector(BaseMetaDectector):
             np.random.shuffle(data)
 
         if len(data[0]) == 3:
+
             num_pairs_in_total_batch = 0
 
             one_pair = data[0]
@@ -535,6 +518,7 @@ class MetaDectector(BaseMetaDectector):
 
         else:
             num_graphs_in_total_batch = 0
+
             cur_graph = data[0][0]
             while num_graphs_in_total_batch < len(data):
                 num_graphs_in_batch = 0
@@ -592,6 +576,9 @@ class MetaDectector(BaseMetaDectector):
                         if num_graphs_in_total_batch < len(data)
                         else None
                     )
+
+
+
                 batch_feed_dict = {
                     self.placeholders['input_node_indices_for_embedding']: batch_node_indices_in_embedding_matrix,
                     self.placeholders['input_num_incoming_edges_per_type']: np.concatenate(batch_num_incoming_edges_per_type, axis=0),
@@ -619,6 +606,7 @@ class MetaDectector(BaseMetaDectector):
                 batch_feed_dict[self.placeholders['out_layer_dropout_keep_prob']] = out_layer_dropout_keep_prob,
 
                 yield batch_feed_dict
+
 
 
 def main():
