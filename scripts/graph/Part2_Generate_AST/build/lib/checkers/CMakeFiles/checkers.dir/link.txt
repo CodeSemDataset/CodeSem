@@ -1,0 +1,2 @@
+/usr/bin/ar qc libcheckers.a CMakeFiles/checkers.dir/AST2Graph.cpp.o CMakeFiles/checkers.dir/PDG2Graph.cpp.o CMakeFiles/checkers.dir/PDG2TokenSequence.cpp.o
+/usr/bin/ranlib libcheckers.a
