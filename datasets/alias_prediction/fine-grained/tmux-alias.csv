@@ -1,0 +1,47 @@
+﻿correct,escaped in arguments.c:519,result in arguments.c:519,incorrect,string in arguments.c:134,found in arguments.c:134
+,errstr in arguments.c:812,cause in arguments.c:810,,argc in arguments.c:389,argv in arguments.c:389
+,errstr in arguments.c:854,is cause in arguments.c:852,,len in arguments.c:475,buf in arguments.c:476
+,delimiters in attributes.c:58,str in attributes.c:56,,len in arguments.c:430,buf in arguments.c:430
+,imsg in attributes.c:623,data in attributes.c:625,,len in arguments.c:430,s in arguments.c:433
+,imsg in attributes.c:623,datalen in attributes.c:626,,buf in arguments.c:430,s in arguments.c:433
+,imsg in attributes.c:718,data in attributes.c:721,,s in arguments.c:515,escaped in arguments.c:519
+,imsg in attributes.c:718,datalen in attributes.c:722,,s in arguments.c:515,result in arguments.c:519
+,line in cmd-capture-pane.c:66,buf in cmd-capture-pane.c:66,,value in arguments.c:851,errstr in arguments.c:854
+,gd in cmd-capture-pane.c:110,wp in cmd-capture-pane.c:108,,value in arguments.c:851,cause in arguments.c:852
+,tmp in cmd-command-prompt.c:88,prompts in cmd-command-prompt.c:88,,linesize in client.c:242,line in client.c:244
+,data in cmd-command-prompt.c:169,cdata in cmd-command-prompt.c:172,,linesize in client.c:242,termname in client.c:238
+,cdata in cmd-command-prompt.c:172,item in cmd-command-prompt.c:174,,linesize in client.c:242,caps in client.c:244
+,argc in cmd-command-prompt.c:177,cdata in cmd-command-prompt.c:172,,linesize in client.c:242,ncaps in client.c:245
+,xp in cmd-display-menu.c:103,yp in cmd-display-menu.c:103,,linesize in client.c:242,lockfile in client.c:110
+,target in cmd-display-menu.c:352,s in cmd-display-menu.c:353,,linesize in client.c:242,cause in client.c:244
+,tc in cmd-display-menu.c:354,tty in cmd-display-menu.c:355,,linesize in client.c:242,feat in client.c:447
+,o in cmd-display-menu.c:363,s in cmd-display-menu.c:353,,linesize in client.c:242,flags in client.c:451
+,ctx in cmd-display-panes.c:59,c in cmd-display-panes.c:62,,linesize in client.c:242,ttynam in client.c:238
+,c in cmd-display-panes.c:62,tty in cmd-display-panes.c:63,,linesize in client.c:242,cwd in client.c:238
+,s in cmd-display-panes.c:64,c in cmd-display-panes.c:62,,linesize in client.c:242,pid in client.c:452
+,oo in cmd-display-panes.c:65,s in cmd-display-panes.c:64,,linesize in client.c:242,ss in client.c:449
+,w in cmd-display-panes.c:66,wp in cmd-display-panes.c:60,,data in client.c:721,data in client.c:597
+,ptr in cmd-display-panes.c:70,buf in cmd-display-panes.c:70,,gc in cmd-capture-pane.c:112,Sflag in cmd-capture-pane.c:116
+,colon in cmd-find.c:928,period in cmd-find.c:928,,gc in cmd-capture-pane.c:112,Eflag in cmd-capture-pane.c:116
+,copy in cmd-find.c:928,period in cmd-find.c:928,,gc in cmd-capture-pane.c:112,cause in cmd-capture-pane.c:115
+,window in cmd-find.c:929,colon in cmd-find.c:928,,gc in cmd-capture-pane.c:112,line in cmd-capture-pane.c:115
+,pane in cmd-find.c:929,period in cmd-find.c:928,,argc in cmd-command-prompt.c:177,argv in cmd-command-prompt.c:178
+,window in cmd-find.c:929,copy in cmd-find.c:928,,argc in cmd-command-prompt.c:177,error in cmd-command-prompt.c:173
+,pane in cmd-find.c:929,copy in cmd-find.c:928,,argv in cmd-command-prompt.c:178,error in cmd-command-prompt.c:173
+,session in cmd-find.c:929,copy in cmd-find.c:928,,name in cmd-display-menu.c:288,px in cmd-display-menu.c:291
+,cdata in cmd-if-shell.c:140,c in cmd-if-shell.c:141,,name in cmd-display-menu.c:288,py in cmd-display-menu.c:291
+,cdata in cmd-if-shell.c:140,item in cmd-if-shell.c:142,,px in cmd-display-menu.c:291,py in cmd-display-menu.c:291
+,state in cmd-if-shell.c:143,cdata in cmd-if-shell.c:140,,oy in cmd-display-menu.c:106,ox in cmd-display-menu.c:106
+,data in cmd-load-buffer.c:55,cdata in cmd-load-buffer.c:57,,px in cmd-display-menu.c:93,py in cmd-display-menu.c:93
+,tc in cmd-load-buffer.c:58,cdata in cmd-load-buffer.c:57,,cause in cmd-display-menu.c:357,argv in cmd-display-menu.c:357
+,item in cmd-load-buffer.c:59,cdata in cmd-load-buffer.c:57,,cause in cmd-display-menu.c:357,argc in cmd-display-menu.c:358
+,copy in cmd-load-buffer.c:62,bdata in cmd-load-buffer.c:60,,cause in cmd-display-menu.c:357,px in cmd-display-menu.c:360
+,target in cmd-paste-buffer.c:53,wp in cmd-paste-buffer.c:51,,cause in cmd-display-menu.c:357,py in cmd-display-menu.c:360
+,msg in cmd-queue.c:856,tmp in cmd-queue.c:856,,ptr in cmd-display-panes.c:70,pane in cmd-display-panes.c:68
+,,,,target in cmd-find.c:924,colon in cmd-find.c:928
+,,,,target in cmd-find.c:924,period in cmd-find.c:928
+,,,,target in cmd-find.c:924,copy in cmd-find.c:928
+,,,,target in cmd-find.c:924,window in cmd-find.c:929
+,,,,target in cmd-find.c:924,pane in cmd-find.c:929
+,,,,window in cmd-find.c:348,errstr in cmd-find.c:351
+,,,,line in cmd-list-keys.c:325,entryp in cmd-list-keys.c:321

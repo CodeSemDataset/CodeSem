@@ -1,0 +1,91 @@
+#include "../../include/dycfoo.h"
+#include "../../include/cp-demangle.i.hd.c.h"
+void __dyc_foo(void) 
+{ char peek ;
+  struct demangle_component *ret ;
+  int can_subst ;
+  struct demangle_component *tmp___8 ;
+  struct demangle_component *tmp___9 ;
+  struct demangle_component *tmp___10 ;
+  struct demangle_component *tmp___11 ;
+  struct demangle_component *tmp___12 ;
+  char const   *tmp___14 ;
+  struct d_info *di ;
+  struct demangle_component *__dyc_funcallvar_28 ;
+  struct demangle_component *__dyc_funcallvar_29 ;
+  struct demangle_component *__dyc_funcallvar_30 ;
+  struct demangle_component *__dyc_funcallvar_31 ;
+  struct demangle_component *__dyc_funcallvar_32 ;
+  struct demangle_component *__dyc_funcallvar_33 ;
+  struct demangle_component *__dyc_funcallvar_34 ;
+  struct demangle_component *__dyc_funcallvar_35 ;
+  struct demangle_component *__dyc_funcallvar_36 ;
+  struct demangle_component *__dyc_funcallvar_37 ;
+  struct demangle_component *__dyc_funcallvar_38 ;
+
+  {
+  di = __dyc_read_ptr__comp_60d_info();
+  __dyc_funcallvar_28 = __dyc_read_ptr__comp_46demangle_component();
+  __dyc_funcallvar_29 = __dyc_read_ptr__comp_46demangle_component();
+  __dyc_funcallvar_30 = __dyc_read_ptr__comp_46demangle_component();
+  __dyc_funcallvar_31 = __dyc_read_ptr__comp_46demangle_component();
+  __dyc_funcallvar_32 = __dyc_read_ptr__comp_46demangle_component();
+  __dyc_funcallvar_33 = __dyc_read_ptr__comp_46demangle_component();
+  __dyc_funcallvar_34 = __dyc_read_ptr__comp_46demangle_component();
+  __dyc_funcallvar_35 = __dyc_read_ptr__comp_46demangle_component();
+  __dyc_funcallvar_36 = __dyc_read_ptr__comp_46demangle_component();
+  __dyc_funcallvar_37 = __dyc_read_ptr__comp_46demangle_component();
+  __dyc_funcallvar_38 = __dyc_read_ptr__comp_46demangle_component();
+  peek = 0;
+  ret = 0;
+  can_subst = 0;
+  tmp___8 = 0;
+  tmp___9 = 0;
+  tmp___10 = 0;
+  tmp___11 = 0;
+  tmp___12 = 0;
+  tmp___14 = 0;
+  (di->n) ++;
+  tmp___8 = __dyc_funcallvar_28;
+  ret = __dyc_funcallvar_29;
+  goto __dyc_dummy_label;
+  (di->n) ++;
+  tmp___9 = __dyc_funcallvar_30;
+  ret = __dyc_funcallvar_31;
+  goto __dyc_dummy_label;
+  (di->n) ++;
+  tmp___10 = __dyc_funcallvar_32;
+  ret = __dyc_funcallvar_33;
+  goto __dyc_dummy_label;
+  (di->n) ++;
+  ret = __dyc_funcallvar_34;
+  if ((int const   )*(di->n) == 73) {
+    {
+    tmp___11 = __dyc_funcallvar_35;
+    ret = __dyc_funcallvar_36;
+    }
+  }
+  tmp___12 = __dyc_funcallvar_37;
+  ret = __dyc_funcallvar_38;
+  goto __dyc_dummy_label;
+  switch_22_68:  
+  can_subst = 0;
+  (di->n) ++;
+  if ((int const   )*(di->n) == 0) {
+    peek = (char )'\000';
+  } else {
+    tmp___14 = di->n;
+    (di->n) ++;
+    peek = (char )*tmp___14;
+  }
+  __dyc_dummy_label:  ;
+  __dyc_printpre_byte(peek);
+  __dyc_print_ptr__comp_46demangle_component(ret);
+  __dyc_printpre_byte(can_subst);
+  __dyc_print_ptr__comp_46demangle_component(tmp___8);
+  __dyc_print_ptr__comp_46demangle_component(tmp___9);
+  __dyc_print_ptr__comp_46demangle_component(tmp___10);
+  __dyc_print_ptr__comp_46demangle_component(tmp___11);
+  __dyc_print_ptr__comp_46demangle_component(tmp___12);
+}
+}

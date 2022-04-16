@@ -1,0 +1,33 @@
+typedef unsigned long size_t;
+struct Curl_llist_element {
+   void *ptr ;
+   struct Curl_llist_element *prev ;
+   struct Curl_llist_element *next ;
+};
+struct Curl_llist {
+   struct Curl_llist_element *head ;
+   struct Curl_llist_element *tail ;
+   void (*dtor)(void * , void * ) ;
+   size_t size ;
+};
+extern size_t __dyc_random_typdef_size_t(unsigned int __dyc_exp ) ;
+extern size_t __dyc_read_typdef_size_t(void) ;
+extern void __dyc_print_typdef_size_t(size_t __dyc_thistype ) ;
+extern struct Curl_llist_element *__dyc_random_ptr__comp_77Curl_llist_element(unsigned int __dyc_exp ) ;
+extern struct Curl_llist_element *__dyc_read_ptr__comp_77Curl_llist_element(void) ;
+extern void __dyc_print_ptr__comp_77Curl_llist_element(struct Curl_llist_element  const  *__dyc_thistype ) ;
+extern void *__dyc_random_ptr__fun_name_is_not_here(unsigned int __dyc_exp ) ;
+extern void *__dyc_read_ptr__fun_name_is_not_here(void) ;
+extern void __dyc_print_ptr__fun_name_is_not_here(void const   * const  __dyc_thistype ) ;
+extern void *__dyc_random_ptr__void(unsigned int __dyc_exp ) ;
+extern void *__dyc_read_ptr__void(void) ;
+extern void __dyc_print_ptr__void(void const   * const  __dyc_thistype ) ;
+extern struct Curl_llist *__dyc_random_ptr__comp_78Curl_llist(unsigned int __dyc_exp ) ;
+extern struct Curl_llist *__dyc_read_ptr__comp_78Curl_llist(void) ;
+extern void __dyc_print_ptr__comp_78Curl_llist(struct Curl_llist  const  *__dyc_thistype ) ;
+extern struct Curl_llist_element __dyc_random_comp_77Curl_llist_element(unsigned int __dyc_exp ) ;
+extern struct Curl_llist_element __dyc_read_comp_77Curl_llist_element(void) ;
+extern void __dyc_print_comp_77Curl_llist_element(struct Curl_llist_element __dyc_thistype ) ;
+extern struct Curl_llist __dyc_random_comp_78Curl_llist(unsigned int __dyc_exp ) ;
+extern struct Curl_llist __dyc_read_comp_78Curl_llist(void) ;
+extern void __dyc_print_comp_78Curl_llist(struct Curl_llist __dyc_thistype ) ;

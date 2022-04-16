@@ -1,6 +1,4 @@
 # Scripts
 
-The code in this directory used to generate the input of the model.
+The code in this directory is used to generate the input for models.
 
-## AST2Graph
-Convert source code to PDG representation which used in ggnn and sandwiches.

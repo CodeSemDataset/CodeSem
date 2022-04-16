@@ -1,0 +1,92 @@
+#include "../../include/dycfoo.h"
+#include "../../include/lvm.i.hd.c.h"
+void __dyc_foo(void) 
+{ StkId base ;
+  TValue *k ;
+  Instruction const   *pc ;
+  Instruction i ;
+  StkId ra ;
+  TValue *rb___7 ;
+  TValue *tmp___19 ;
+  TValue *rc___4 ;
+  TValue *tmp___20 ;
+  lua_Number nb___4 ;
+  lua_Number nc___4 ;
+  TValue *i_o___8 ;
+  TValue *rb___8 ;
+  lua_Number nb___5 ;
+  TValue *i_o___9 ;
+  lua_State *L ;
+  double __dyc_funcallvar_5 ;
+
+  {
+  base = __dyc_read_ptr__typdef_TValue();
+  k = __dyc_read_ptr__typdef_TValue();
+  pc = (Instruction const   *)__dyc_read_ptr__typdef_Instruction();
+  i = (Instruction )__dyc_readpre_byte();
+  ra = __dyc_read_ptr__typdef_TValue();
+  tmp___19 = __dyc_read_ptr__typdef_TValue();
+  L = __dyc_read_ptr__typdef_lua_State();
+  __dyc_funcallvar_5 = (double )__dyc_readpre_byte();
+  rb___7 = 0;
+  rc___4 = 0;
+  tmp___20 = 0;
+  nb___4 = 0;
+  nc___4 = 0;
+  i_o___8 = 0;
+  rb___8 = 0;
+  nb___5 = 0;
+  i_o___9 = 0;
+  rb___7 = tmp___19;
+  if ((int )((i >> 14) & ~ (4294967295U << 9)) & (1 << 8)) {
+    tmp___20 = k + ((int )((i >> 14) & ~ (4294967295U << 9)) & ~ (1 << 8));
+  } else {
+    tmp___20 = base + (int )((i >> 14) & ~ (4294967295U << 9));
+  }
+  rc___4 = tmp___20;
+  if (rb___7->tt == 3) {
+    if (rc___4->tt == 3) {
+      {
+      nb___4 = rb___7->value.n;
+      nc___4 = rc___4->value.n;
+      i_o___8 = ra;
+      i_o___8->value.n = __dyc_funcallvar_5;
+      i_o___8->tt = 3;
+      }
+    } else {
+      {
+      L->savedpc = pc;
+
+      base = L->base;
+      }
+    }
+  } else {
+    {
+    L->savedpc = pc;
+
+    base = L->base;
+    }
+  }
+  goto __dyc_dummy_label;
+  switch_9_18:  
+  rb___8 = base + (int )((i >> 23) & ~ (4294967295U << 9));
+  if (rb___8->tt == 3) {
+    nb___5 = rb___8->value.n;
+    i_o___9 = ra;
+    i_o___9->value.n = - nb___5;
+    i_o___9->tt = 3;
+  } else {
+    {
+    L->savedpc = pc;
+
+    base = L->base;
+    }
+  }
+  goto __dyc_dummy_label;
+  __dyc_dummy_label:  ;
+  __dyc_print_ptr__typdef_TValue(base);
+  __dyc_print_ptr__typdef_TValue(rc___4);
+  __dyc_printpre_byte(nb___4);
+  __dyc_printpre_byte(nc___4);
+}
+}

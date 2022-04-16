@@ -1,0 +1,40 @@
+#include "../../include/dycfoo.h"
+#include "../../include/op_model_p4.i.hd.c.h"
+void __dyc_foo(void) 
+{ unsigned int i ;
+  unsigned int low ;
+  int tmp ;
+  int tmp___0 ;
+  long tmp___1 ;
+  struct op_msrs  const  *msrs ;
+  long __dyc_funcallvar_2 ;
+
+  {
+  i = (unsigned int )__dyc_readpre_byte();
+  low = (unsigned int )__dyc_readpre_byte();
+  msrs = (struct op_msrs  const  *)__dyc_read_ptr__comp_137op_msrs();
+  __dyc_funcallvar_2 = (long )__dyc_readpre_byte();
+  tmp = 0;
+  tmp___0 = 0;
+  tmp___1 = 0;
+  if ((msrs->controls + i)->addr) {
+    tmp = 1;
+  } else {
+    tmp = 0;
+  }
+  if (tmp) {
+    tmp___0 = 0;
+  } else {
+    tmp___0 = 1;
+  }
+  tmp___1 = __dyc_funcallvar_2;
+  if (tmp___1) {
+    goto __dyc_dummy_label;
+  }
+  low &= 939724799U;
+  low |= 196608U;
+  __dyc_dummy_label:  ;
+  __dyc_printpre_byte(low);
+  __dyc_printpre_byte(tmp___0);
+}
+}

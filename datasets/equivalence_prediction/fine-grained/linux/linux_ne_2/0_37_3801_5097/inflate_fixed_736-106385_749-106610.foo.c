@@ -1,0 +1,59 @@
+#include "../../include/dycfoo.h"
+#include "../../include/misc_64.i.hd.c.h"
+void __dyc_foo(void) 
+{ int i ;
+  int bl ;
+  unsigned int *l ;
+  void *tmp ;
+
+  {
+  tmp = __dyc_read_ptr__void();
+  i = 0;
+  bl = 0;
+  l = 0;
+  l = (unsigned int *)tmp;
+  if ((unsigned long )l == (unsigned long )((void *)0)) {
+    goto __dyc_dummy_label;
+  }
+  i = 0;
+  while (1) {
+    while_29_continue:  ;
+    if (! (i < 144)) {
+      goto while_29_break;
+    }
+    *(l + i) = 8U;
+    i ++;
+  }
+  while_29_break:  ;
+  while (1) {
+    while_30_continue:  ;
+    if (! (i < 256)) {
+      goto while_30_break;
+    }
+    *(l + i) = 9U;
+    i ++;
+  }
+  while_30_break:  ;
+  while (1) {
+    while_31_continue:  ;
+    if (! (i < 280)) {
+      goto while_31_break;
+    }
+    *(l + i) = 7U;
+    i ++;
+  }
+  while_31_break:  ;
+  while (1) {
+    while_32_continue:  ;
+    if (! (i < 288)) {
+      goto while_32_break;
+    }
+    *(l + i) = 8U;
+    i ++;
+  }
+  while_32_break:  ;
+  bl = 7;
+  __dyc_dummy_label:  ;
+  __dyc_printpre_byte(bl);
+}
+}

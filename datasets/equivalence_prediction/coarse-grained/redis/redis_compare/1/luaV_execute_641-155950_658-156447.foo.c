@@ -1,0 +1,76 @@
+#include "../../include/dycfoo.h"
+#include "../../include/lvm.i.hd.c.h"
+void __dyc_foo(void) 
+{ Instruction const   *pc ;
+  Instruction i ;
+  StkId ra ;
+  int b___4 ;
+  int __attribute__((__visibility__("hidden")))  tmp___38 ;
+  lua_Number step ;
+  lua_Number idx ;
+  lua_Number limit ;
+  TValue *i_o___13 ;
+  TValue *i_o___14 ;
+  int tmp___39 ;
+  lua_State *L ;
+  int nexeccalls ;
+  int __attribute__((__visibility__("hidden")))  __dyc_funcallvar_13 ;
+
+  {
+  pc = (Instruction const   *)__dyc_read_ptr__typdef_Instruction();
+  i = (Instruction )__dyc_readpre_byte();
+  ra = __dyc_read_ptr__typdef_TValue();
+  b___4 = __dyc_readpre_byte();
+  L = __dyc_read_ptr__typdef_lua_State();
+  nexeccalls = __dyc_readpre_byte();
+  __dyc_funcallvar_13 = (int __attribute__((__visibility__("hidden")))  )__dyc_readpre_byte();
+  tmp___38 = 0;
+  step = 0;
+  idx = 0;
+  limit = 0;
+  i_o___13 = 0;
+  i_o___14 = 0;
+  tmp___39 = 0;
+  if (b___4 != 0) {
+    L->top = (ra + b___4) - 1;
+  }
+  if (L->openupval) {
+    {
+
+    }
+  }
+  L->savedpc = pc;
+  tmp___38 = __dyc_funcallvar_13;
+  b___4 = (int )tmp___38;
+  nexeccalls --;
+  if (nexeccalls == 0) {
+    goto __dyc_dummy_label;
+  } else {
+    if (b___4) {
+      L->top = (L->ci)->top;
+    }
+    goto __dyc_dummy_label;
+  }
+  switch_9_31:  
+  step = (ra + 2)->value.n;
+  idx = ra->value.n + step;
+  limit = (ra + 1)->value.n;
+  if ((lua_Number )0 < step) {
+    tmp___39 = idx <= limit;
+  } else {
+    tmp___39 = limit <= idx;
+  }
+  if (tmp___39) {
+    pc += (int )((i >> 14) & ~ (4294967295U << 18)) - (((1 << 18) - 1) >> 1);
+    i_o___13 = ra;
+    i_o___13->value.n = idx;
+    i_o___13->tt = 3;
+    i_o___14 = ra + 3;
+    i_o___14->value.n = idx;
+    i_o___14->tt = 3;
+  }
+  __dyc_dummy_label:  ;
+  __dyc_print_ptr__typdef_Instruction(pc);
+  __dyc_printpre_byte(b___4);
+}
+}

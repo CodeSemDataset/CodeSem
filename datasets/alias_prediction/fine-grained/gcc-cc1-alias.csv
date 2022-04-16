@@ -1,0 +1,37 @@
+﻿correct,entry in ../../gcc/hash-table.h:915,&m_entries in ../../gcc/hash-table.h:928,,,incorrect,str in ../../gcc/attribs.c:903,str in ../../gcc/attribs.c:917
+,anode in ../../gcc/attribs.c:555,node in ../../gcc/attribs.c:469,,,,c1 in ../../gcc/attribs.c:880,c2 in ../../gcc/attribs.c:881
+,excl in ../../gcc/attribs.c:360,spec in ../../gcc/attribs.c:358,,,,target2 in ../../gcc/attribs.c:969,target1 in ../../gcc/attribs.c:969
+,c1 in ../../gcc/attribs.c:880,v1 in ../../gcc/attribs.c:878,,,,name in ../../gcc/attribs.c:1032,unique_name in ../../gcc/attribs.c:1033
+,c2 in ../../gcc/attribs.c:881,v2 in ../../gcc/attribs.c:878,,,,p in ../../gcc/attribs.c:1409,attr_name in ../../gcc/attribs.c:1407
+,p in ../../gcc/attribs.c:1409,&list in ../../gcc/attribs.c:1412,,,,d2 in ../../gcc/c/c-decl.c:8708,d1 in ../../gcc/c/c-decl.c:870
+,x in ../../gcc/c/c-decl.c:8696,x_p in ../../gcc/c/c-decl.c:8694,,,,x in ../../gcc/c/c-decl.c:8696,y in ../../gcc/c/c-decl.c:86977
+,y in ../../gcc/c/c-decl.c:86977,y_p in ../../gcc/c/c-decl.c:8694,,,,type in ../../gcc/c/c-decl.c:5952,expr in ../../gcc/c/c-decl.c:5949
+,b in ../../gcc/c/c-decl.c:721,binding_freelist in ../../gcc/c/c-decl.c:725,,,,type in ../../gcc/c/c-decl.c:5952,size_maybe_const in ../../gcc/c/c-decl.c:6401
+,*here in ../../gcc/c/c-decl.c:776,b in ../../gcc/c/c-decl.c:721,two level pointer,,,type in ../../gcc/c/c-decl.c:5952,expr_const_operands in ../../gcc/c/c-decl.c:5949
+,*here in ../../gcc/c/c-decl.c:2520,b in ../../gcc/c/c-decl.c:2512,two level pointer,,,size_maybe_const in ../../gcc/c/c-decl.c:6401,expr in ../../gcc/c/c-decl.c:5949
+,attr_ptr in ../../gcc/c/c-decl.c:4570,&attr in ../../gcc/c/c-decl.c:4570,two level pointer,,,size_maybe_const in ../../gcc/c/c-decl.c:6401,expr_const_operands in ../../gcc/c/c-decl.c:5949
+,expr_const_operands in ../../gcc/c/c-decl.c:5949,expr_const_operands_dummy in ../../gcc/c/c-decl.c:5991,two level pointer,1072,,attributes in ../../gcc/c/c-decl.c:4999,expr in ../../gcc/c/c-decl.c:5003
+,expr in ../../gcc/c/c-decl.c:5949,expr_dummy in ../../gcc/c/c-decl.c:5987,two level pointer,,,decl in ../../gcc/c/c-decl.c:5001,attributes in ../../gcc/c/c-decl.c:4999
+,*enclosing_struct_parse_info in ../../gcc/c/c-decl.c:8008,struct_parse_info in ../../gcc/c/c-decl.c:8008,,,,t in ../../gcc/c/c-decl.c:8390,typep in ../../gcc/c/c-decl.c:8561
+,typep in ../../gcc/c/c-decl.c:8561,&fmain_type in ../../gcc/c/c-decl.c:8561,,,,y in ../../gcc/c/c-decl.c:8176,slot in ../../gcc/c/c-decl.c:8177
+,x in ../../gcc/c/c-decl.c:8346,x_p in ../../gcc/c/c-decl.c:8344,,,,xn in ../../gcc/c/c-decl.c:8200,slot in ../../gcc/c/c-decl.c:8177
+,y in ../../gcc/c/c-decl.c:8347,y_p in ../../gcc/c/c-decl.c:8344,,,,y in ../../gcc/c/c-decl.c:8176,xn in ../../gcc/c/c-decl.c:8200
+,vars in ../../gcc/c/c-decl.c:12030,data in ../../gcc/c/c-decl.c:12028,,,,x in ../../gcc/c/c-decl.c:8346,y in ../../gcc/c/c-decl.c:8347
+,d in ../../gcc/c/c-typeck.c:7748,buffer in ../../gcc/c/c-typeck.c:7746,,,,tp in ../../gcc/c/c-decl.c:12028,vars in ../../gcc/c/c-decl.c:12030
+,s in ../../gcc/c/c-typeck.c:7759,p in ../../gcc/c/c-typeck.c:7749,,,,enum_and_int_p in ../../gcc/c/c-typeck.c:1090,different_types_p in ../../gcc/c/c-typeck.c:1091
+,p in ../../gcc/c/c-typeck.c:7749,spelling_base in ../../gcc/c/c-typeck.c:7751,,,,maybe_const in ../../gcc/c/c-typeck.c:11708,maybe_const in ../../gcc/c/c-typeck.c:11723
+,p in ../../gcc/c/c-typeck.c:9413,end in ../../gcc/c/c-typeck.c:9413,offset,,,type_expr in ../../gcc/c/c-typeck.c:3004,type_expr_const in ../../gcc/c/c-typeck.c:3005
+,q in ../../gcc/c/c-typeck.c:9138,&constructor_pending_elts  in ../../gcc/c/c-typeck.c:9140,,,,ovf in ../../gcc/c/c-typeck.c:5295,op2_maybe_const in ../../gcc/c/c-typeck.c:5305
+,p in ../../gcc/c/c-typeck.c:9138,*q in ../../gcc/c/c-typeck.c:9147,,,,ovf in ../../gcc/c/c-typeck.c:5295,op1_maybe_const in ../../gcc/c/c-typeck.c:5304
+,r in ../../gcc/c/c-typeck.c:9138,*q in ../../gcc/c/c-typeck.c:9147,,,,op2_maybe_const in ../../gcc/c/c-typeck.c:5305,op1_maybe_const in ../../gcc/c/c-typeck.c:5304
+,pc in ../../gcc/c/c-typeck.c:13874,&clauses in ../../gcc/c/c-typeck.c:13911,,,,type_expr in ../../gcc/c/c-typeck.c:6044,inner_expr_const in ../../gcc/c/c-typeck.c:6063
+,p in ../../gcc/c/c-aux-info.c:62,type_or_decl in ../../gcc/c/c-aux-info.c:61,,,,type_expr_const in ../../gcc/c/c-typeck.c:6045,type_expr in ../../gcc/c/c-typeck.c:6044
+,,,,,,constraint in ../../gcc/c/c-typeck.c:10494,is_inout in ../../gcc/c/c-typeck.c:10496
+,,,,,,allows_reg in ../../gcc/c/c-typeck.c:10496,constraint in ../../gcc/c/c-typeck.c:10494
+,,,,,,maybe_zero_len in ../../gcc/c/c-typeck.c:13359,first_non_one in ../../gcc/c/c-typeck.c:13360
+,,,,,,tp in ../../gcc/c/c-typeck.c:13362,maybe_zero_len in ../../gcc/c/c-typeck.c:13359
+,,,,,,tp in ../../gcc/c/c-typeck.c:13362,first_non_one in ../../gcc/c/c-typeck.c:13360
+,,,,,,p in ../../gcc/c/c-parser.c:17874,p2 in ../../gcc/c/c-parser.c:17894
+,,,,,,p in ../../gcc/c/c-parser.c:17874,p in ../../gcc/c/c-parser.c:17947
+,,,,,,p2 in ../../gcc/c/c-parser.c:17894,p in ../../gcc/c/c-parser.c:17947
+,,,,,,attrs in ../../gcc/c/c-parser.c:3557,d in ../../gcc/c/c-parser.c:3609

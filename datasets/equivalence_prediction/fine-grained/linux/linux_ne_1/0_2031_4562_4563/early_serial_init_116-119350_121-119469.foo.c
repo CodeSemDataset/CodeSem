@@ -1,0 +1,41 @@
+#include "../../include/dycfoo.h"
+#include "../../include/early_printk.i.hd.c.h"
+void __dyc_foo(void) 
+{ int early_serial_base ;
+  int bases[2] ;
+  char *e ;
+  unsigned int port ;
+  int tmp___0 ;
+  unsigned long tmp___1 ;
+  char *s ;
+  int __dyc_funcallvar_2 ;
+  unsigned long __dyc_funcallvar_3 ;
+
+  {
+  e = __dyc_read_ptr__char();
+  s = __dyc_read_ptr__char();
+  __dyc_funcallvar_2 = __dyc_readpre_byte();
+  __dyc_funcallvar_3 = (unsigned long )__dyc_readpre_byte();
+  early_serial_base = 0;
+  port = 0;
+  tmp___0 = 0;
+  tmp___1 = 0;
+  tmp___0 = __dyc_funcallvar_2;
+  if (! tmp___0) {
+    s += 4;
+  }
+  tmp___1 = __dyc_funcallvar_3;
+  port = (unsigned int )tmp___1;
+  if (port > 1U) {
+    port = 0U;
+  } else {
+    if ((unsigned long )s == (unsigned long )e) {
+      port = 0U;
+    }
+  }
+  early_serial_base = bases[port];
+  __dyc_dummy_label:  ;
+  __dyc_printpre_byte(early_serial_base);
+  __dyc_print_ptr__char(s);
+}
+}
