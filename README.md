@@ -7,4 +7,4 @@ The alias and equivalent datasets we collected.
 The models we used in the evaluation.
 
 ## scripts
-The scripts used to convert source code to graph representations as the input of models.
+The scripts we used to convert source code to model input.
