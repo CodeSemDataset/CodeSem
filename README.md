@@ -42,7 +42,7 @@ CodeSem is a dataset built upon the source code of real-world flagship software 
 Fourteen open-source projects are selected to construct CodeSem: Linux Kernel, GCC, MySQL, Git, tmux, Redis, curl, LevelDB, H2O, libgit2, The Silver Searcher, Protocol Buffers, aria2, and fish. These are all mature projects, most of which are large-scale (with hundreds of thousands or even millions of lines of code) and have a decades-long history. In general, the source code of those projects implement a board range of functionalities such as data transmission, memory management, cross-compilation, etc. which in turn makes CodeSem diverse.
 
 | Projects     | Description                                     | Version | Size (KLoC) |
-| ------------ | --------------- ------------------------------- | ------- | ----------- |
+| ------------ | ----------------------------------------------- | ------- | ----------- |
 | Linux Kernel | The main component of a Linux operating system. | 5.3.6   | 18,892      |
 | MySQL        | A relational database management system.        | 8.0.25  | 5,800       |
 | GCC          | A compiler for the GNU operating system.        | 10.3.0  | 12,196      |
