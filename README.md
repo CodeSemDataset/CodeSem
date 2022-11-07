@@ -25,7 +25,8 @@ cd CodeSem
 docker build --network=host -t "tf:2.6" .
 
 # run a new docker container
-docker run --gpus all -it --rm -v $Dir:/tmp tf:2.6 bash
+# Dir is the workdir of your local device
+docker run --gpus all -it --rm -v $Dir/CodeSem:/tmp tf:2.6 bash
 
 # refer to README in Scripts/tokens and Scripts/graph to generate model input
 
@@ -37,68 +38,76 @@ CodeSem is a dataset built upon the source code of real-world flagship software 
 
 ## Datasets
 
-<!-- The dataset for equivalence prediction and alias prediction that we collected. -->
+<!-- The dataset for alias prediction and equivalence prediction that we collected. -->
 <!-- The details about the projects we selected for CodeSem are shown below. -->
-Fourteen open-source projects are selected to construct CodeSem: Linux Kernel, GCC, MySQL, Git, tmux, Redis, curl, LevelDB, H2O, libgit2, The Silver Searcher, Protocol Buffers, aria2, and fish. These are all mature projects, most of which are large-scale (with hundreds of thousands or even millions of lines of code) and have a decades-long history. In general, the source code of those projects implement a board range of functionalities such as data transmission, memory management, cross-compilation, etc. which in turn makes CodeSem diverse.
+Fourteen open-source projects are selected to construct CodeSem: Linux Kernel, GCC, MySQL, Git, tmux, Redis, curl, LevelDB, H2O, libgit2, The Silver Searcher, Protocol Buffers, aria2, and fish. These are all mature projects, most of which are large-scale (with hundreds of thousands or even millions of lines of code) and have a decades-long history. In general, the source code of those projects implement a board range of functionalities such as data transmission, memory management, cross-compilation, etc., which in turn makes CodeSem diverse. We give the details about the projects we selected for CodeSem in the table below.
 
 | Projects     | Description                                     | Version | Size (KLoC) |
 | ------------ | ----------------------------------------------- | ------- | ----------- |
-| Linux Kernel | The main component of a Linux operating system. | 5.3.6   | 18,892      |
-| MySQL        | A relational database management system.        | 8.0.25  | 5,800       |
-| GCC          | A compiler for the GNU operating system.        | 10.3.0  | 12,196      |
-| Git          | A distributed version control system.           | 2.23.1  | 890         |
+| Linux Kernel | The main component of a Linux operating system. | [5.3.6](https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.3.6.tar.gz)   | 18,892      |
+| MySQL        | A relational database management system.        | [8.0.25](https://downloads.mysql.com/archives/get/p/23/file/mysql-8.0.25.tar.gz)  | 5,800       |
+| GCC          | A compiler for the GNU operating system.        | [10.3.0](https://ftp.gnu.org/gnu/gcc/gcc-10.3.0/gcc-10.3.0.tar.gz)  | 12,196      |
+| Git          | A distributed version control system.           | [2.23.1](https://mirrors.edge.kernel.org/pub/software/scm/git/git-2.23.1.tar.gz)  | 890         |
 | tmux         | A terminal multiplexer.                         | 3.3-rc  | 86          |
-| Redis        | An in-memory key–value database.                | 6.2.6   | 234         |
-| curl         | A data transferring tool.                       | 7.79.0  | 283         |
-| LevelDB      | A key-value storage library.                    | 1.23    | 115         |
-| H2O          | An optimized HTTP/1, HTTP/2, HTTP/3 server.     | 2.2.6  |  371         |
-| libgit2      | A cross-platform, linkable library implementation of Git. |  1.4.2 |  280      |
-| The Silver Searcher |   A code-searching tool                  | 2.2.0  | 21          |
-| Protocol Buffers|  A cross-platform data format used to serialize structured data. | 3.20.0  |   894     |
-| aria2        |    A utility for downloading files.             | 1.36.0  |  367     |
-| fish         |   A user-friendly command line shell.           | 3.4.1  |  455      |
+| Redis        | An in-memory key–value database.                | [6.2.6](https://github.com/redis/redis/archive/refs/tags/6.2.6.tar.gz)   | 234         |
+| curl         | A data transferring tool.                       | [7.79.0](https://github.com/curl/curl/releases/download/curl-7_79_0/curl-7.79.0.tar.gz)  | 283         |
+| LevelDB      | A key-value storage library.                    | [1.23](https://github.com/google/leveldb/archive/refs/tags/1.23.tar.gz)    | 115         |
+| H2O          | An optimized HTTP/1, HTTP/2, HTTP/3 server.     | [2.2.6](https://github.com/h2o/h2o/archive/refs/tags/v2.2.6.tar.gz) |  371         |
+| libgit2      | A cross-platform, linkable library implementation of Git. |  [1.4.2](https://github.com/libgit2/libgit2/archive/refs/tags/v1.4.2.tar.gz) |  280      |
+| The Silver Searcher |   A code-searching tool                  | [2.2.0](https://github.com/ggreer/the_silver_searcher/archive/refs/tags/2.2.0.tar.gz) | 21          |
+| Protocol Buffers|  A cross-platform data format used to serialize structured data. | [3.20.0](https://github.com/protocolbuffers/protobuf/archive/refs/tags/v3.20.0.tar.gz) |   894     |
+| aria2        |    A utility for downloading files.             | [1.36.0](https://github.com/aria2/aria2/archive/refs/tags/release-1.36.0.tar.gz) |  367     |
+| fish         |   A user-friendly command line shell.           | [3.4.1](https://github.com/fish-shell/fish-shell/archive/refs/tags/3.4.1.tar.gz) |  455      |
 
 ### Data Details
-This is the structure of our datasets:
+We assemble dataset for the following two tasks: alias prediction and equivalence prediction. The structure of the dataset is shown below:
 ```
 .
 ├── alias_prediction
 │   ├── fine-tune
-│   │   ├── curl-alias.csv
-│   │   ├── gcc-cc1-alias.csv
+│   │   ├── curl.csv
+│   │   ├── gcc.csv
 │   │   └── ...
-│   └── pre-train_global
-│       ├── gcc_cc1_aa_result-cfl-anders-wy-alias-pair.csv
+│   └── global-level_pre-train
+│       ├── gcc.csv
 │       └── ...
 └── equivalence_prediction
-    ├── README.md
     ├── fine-tune
-    │   ├── curl
-    │   │   ├── curl_eq
-    │   │   │   ├── 1_146_147_148_149_150_151_152
-    │   │   │   │   ├── tool_list_engines_1006-194455_1012-198094.foo.c
-    │   │   │   │   ├── tool_list_engines_1006-194455_1023-198297.foo.c
-    │   │   │   │   ├── tool_list_engines_1009-194517_1012-198094.foo.c
-    │   │   │   │   └── tool_list_engines_1009-194517_1023-198297.foo.c
-    │   │   │   └── ... 
-    │   │   ├── curl_ne_1
-    │   │   │   ├── 2_147_149_150_151_152_153_154
-    │   │   │   │   ├── Curl_splay_45-167885_50-167961.foo.c
-    │   │   │   │   └── tool_list_engines_1005-194422_1009-194585.foo.c
-    │   │   │   └── ...
-    │   │   │   
-    │   │   ├── curl_ne_2
-    │   │   └── include
-    │   │       ├── curl_threads.i.hd.c.h
-    │   │       └── ...
-    │   ├── gcc
+    │   ├── aria2_compare_equal_pairs.csv
+    │   ├── aria2_compare_inequal_pairs.csv
+    │   ├── curl_compare_equal_pairs.csv
+    │   ├── curl_compare_inequal_pairs.csv
     │   └── ...
-    └── pre-train_global
-        ├── curl
-        ├── gcc
+    ├── global-level_pre-train
+    │   ├── aria2_compare_equal_pairs.csv
+    │   ├── aria2_compare_inequal_pairs.csv
+    │   ├── curl_compare_equal_pairs.csv
+    │   ├── curl_compare_inequal_pairs.csv
+    │   └── ...
+    └── AllProjects
+        ├── aria2_compare
+        │   ├── 1
+        │   │   ├── wslay_event_recv_508-135788_607-140735.foo.c
+        │   │   ├── wslay_event_recv_508-135788_696-145433.foo.c
+        │   │   ├── wslay_event_recv_508-135788_703-145874.foo.c
+        │   │   ├── wslay_event_recv_519-136415_607-140735.foo.c
+        │   │   └── ...
+        │   ├── 1_1090
+        │   │   ├──wslay_event_recv_596-139874_703-145874.foo.c
+        │   │   └── ...
+        │   ├── ...
+        │   └── include
+        │       ├──dycfoo.h
+        │       ├──uri_split.i.hd.c.h
+        │       └── ...
+        ├── curl_compare
         └── ...
 ```
-There are two subdatasets under [datasets](https://github.com/CodeSemDataset/CodeSem/tree/main/datasets): [alias_prediction](https://github.com/CodeSemDataset/CodeSem/tree/main/datasets/alias_prediction) and [equivalence_prediction](https://github.com/CodeSemDataset/CodeSem/tree/main/datasets/equivalence_prediction), for two prediction tasks. The dataset for each task is further divided into pre-train_global and fine-tune, for different training tasks we designed for these three models. In [alias_prediction](https://github.com/CodeSemDataset/CodeSem/tree/main/datasets/alias_prediction), we use `csv` file to record alias pair and non-alias pair. In [equivalence_prediction](https://github.com/CodeSemDataset/CodeSem/tree/main/datasets/equivalence_prediction), we save the one function in each file, the file in each folder are equivalence to each other, the file in different folders are not equivalence to each other.
+There are two subdatasets under [datasets](https://github.com/CodeSemDataset/CodeSem/tree/main/datasets): [alias_prediction](https://github.com/CodeSemDataset/CodeSem/tree/main/datasets/alias_prediction) and [equivalence_prediction](https://github.com/CodeSemDataset/CodeSem/tree/main/datasets/equivalence_prediction), for two prediction tasks. The dataset for each task is further divided into `global-level_pre-train` and `fine-tune`, for different training stages we designed for these three models. 
+
+For alias prediction, each `csv` file is formatted like `['name1', 'path1', 'def_line1', 'name2', 'path2', 'def_line2', 'fine_grained_label', 'alias_type']`, in which the first three columns represent the variable name of the first variable, the relative path to the file where it is located, and the row where the definition point is located. Columns four through six represent the similar information for the second variable. The seventh column represents the label, which means that the two variables are alias (label is 1) or nonalias (label is 0). The eighth column represents the alias type we defined in the paper if the pair of variables are aliased. This column is only valid for aliases in fine-tuning dataset.
+
+For equivalent predictions, each `csv` file is named after` 'projectName_compare_dataType_pairs.csv'`, and the file is formatted like `['file1', 'file2']`. `file1` and `file2` correspond to the relative paths of the two files in the `projectName_compare` subdirectory in Allprojects. When the `dataType` is `equal`, the two files are semantically equivalent, and label is 1. When the `dataType` is `inequal`, the two files are inequivalent, and label is 0. Each `.foo.c` file under `equivalence_prediction` can be compiled to `.ast` by using `clang`. (The header files required for each project are in the project's `include` folder, so just keep the current directory structure and run the command, e.g. `clang -emit-ast -c ./datasets/equivalence_prediction/AllProjects/gcc_compare/6/byte_re_match_2_internal_6583-212619_6851-219281.foo.c`.)
 
 ## Models
 
