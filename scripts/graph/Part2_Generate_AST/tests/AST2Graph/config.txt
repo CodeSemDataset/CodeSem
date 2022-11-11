@@ -1,4 +1,0 @@
-CheckerEnable
-{
-	AST2Graph = true
-}

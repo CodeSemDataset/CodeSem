@@ -12,9 +12,5 @@ Make sure there are initial dicts under ./tests before running
 
 ## Others
 
-The class CSVRead which gets defined in ./include/framework/function.h controls the input of CSV file, currently the class use absolute path to locate the .ast source file, you should change the paths to your own input paths when using, the brief introduction is as follow:
-
-ReadFromSingleCSV()： read gcc/linux/mysql alias file
-
-deal_with_filename()：switch the path of alias in csv file to actual .ast file path
+The class CSVRead which gets defined in ./include/framework/function.h controls the input of CSV file, currently the class use absolute path to locate the .ast source file, you should change the paths to your own input paths when using.
 

@@ -1,2 +1,0 @@
-/usr/bin/ar qc libframework.a CMakeFiles/framework.dir/Common.cpp.o CMakeFiles/framework.dir/Config.cpp.o CMakeFiles/framework.dir/Function.cpp.o CMakeFiles/framework.dir/WordDict.cpp.o
-/usr/bin/ranlib libframework.a
