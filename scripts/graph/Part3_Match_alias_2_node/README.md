@@ -1,14 +1,12 @@
 # README
 
-## Function of the project
-
-This project is an extension of part2, besides generating AST(ggnn, sandwich), PDG-AST, PDG-TokenSequence, CFG-AST, CFG-TokenSequence, it can match the input alias to the specific node in above graphs
+This project is an extension of part2, besides generating AST(ggnn, sandwich), PDG-AST, PDG-TokenSequence, CFG-AST, CFG-TokenSequence, it can match the input alias to the specific node in above graphs.
 
 ## Build and run
 
-You can find out the build steps in part1, the build steps for this paoject is exactly the same
+You can find out the build steps in part1, the build steps for this paoject is exactly the same.
 
-Make sure there are initial dicts under ./tests before running
+Make sure there are initial dicts under ./tests before running.
 
 ## Others
 
