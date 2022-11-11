@@ -1,0 +1,14 @@
+name1,path1,def_line1,name2,path2,def_line2,fine_grained_label,alias_type
+p,/bigdata/qian/curl-curl-7_79_0/src/tool_cb_hdr.c,222,q,/bigdata/qian/curl-curl-7_79_0/src/tool_cb_hdr.c,223,0,
+next,/bigdata/qian/curl-curl-7_79_0/src/tool_cfgable.c,98,next,/bigdata/qian/curl-curl-7_79_0/src/tool_cfgable.c,98,0,
+param_place,/bigdata/qian/curl-curl-7_79_0/src/tool_getparam.c,380,cert_parameter,/bigdata/qian/curl-curl-7_79_0/src/tool_getparam.c,380,0,
+transfersl,/bigdata/qian/curl-curl-7_79_0/src/tool_operate.c,219,p,/bigdata/qian/curl-curl-7_79_0/src/tool_operate.c,219,0,
+getadded,/bigdata/qian/curl-curl-7_79_0/src/tool_operate.c,2124,addedp,/bigdata/qian/curl-curl-7_79_0/src/tool_operate.c,2117,0,
+operation,/bigdata/qian/curl-curl-7_79_0/src/tool_cb_dbg.c,48,userdata,/bigdata/qian/curl-curl-7_79_0/src/tool_cb_dbg.c,46,1,1
+output,/bigdata/qian/curl-curl-7_79_0/src/tool_cb_dbg.c,50,errors,/bigdata/qian/curl-curl-7_79_0/src/tool_cb_dbg.c,50,1,1
+hdrcbdata,/bigdata/qian/curl-curl-7_79_0/src/tool_cb_hdr.c,59,hdrcbdata,/bigdata/qian/curl-curl-7_79_0/src/tool_cb_hdr.c,59,1,1
+outs,/bigdata/qian/curl-curl-7_79_0/src/tool_cb_hdr.c,60,outs,/bigdata/qian/curl-curl-7_79_0/src/tool_cb_hdr.c,60,1,1
+etag_save,/bigdata/qian/curl-curl-7_79_0/src/tool_cb_hdr.c,62,etag_save,/bigdata/qian/curl-curl-7_79_0/src/tool_cb_hdr.c,62,1,1
+str,/bigdata/qian/curl-curl-7_79_0/src/tool_cb_hdr.c,63,ptr,/bigdata/qian/curl-curl-7_79_0/src/tool_cb_hdr.c,63,1,1
+config,/bigdata/qian/curl-curl-7_79_0/src/tool_cb_prg.c,133,config,/bigdata/qian/curl-curl-7_79_0/src/tool_cb_prg.c,133,1,1
+config,/bigdata/qian/curl-curl-7_79_0/src/tool_cb_rea.c,66,config,/bigdata/qian/curl-curl-7_79_0/src/tool_cb_rea.c,66,1,1

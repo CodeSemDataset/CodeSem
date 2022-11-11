@@ -21,6 +21,7 @@ from clang.cindex import CursorKind,TranslationUnit,Index
 from pack.util import initVocab, tokens2string, writeOutFiles, \
     refineTokens, updateVocabLoc, my_preorder
 import pack.util as util
+from pack.config import *
 
 conf=Config()
 queDebug=queue.Queue(-1)
@@ -121,10 +122,9 @@ vocabValMat=[]
 visitedLoc=set()
 # validTypes={'.c','.cc','.cpp','.h'}
 validTypes={'c','cc','cpp'}
-# prefix='/bigdata/qian/'
-prefix='/bigdata/newdisk/share/AllProjects'
-# prefix='/home/ruyan/empirical_study/tokenize/tkzrun/testin'
-# srcDirs=[prefix+'curl-curl-7_79_0',prefix+'rebuild-git/git',prefix+'redis',prefix+'tmux','/home/shared/projects/']
+prefix='/bigdata/qian/'
+# prefix='/bigdata/newdisk/share/AllProjects'
+# srcPaths=[prefix+'curl-curl-7_79_0',prefix+'rebuild-git/git',prefix+'redis',prefix+'tmux','/bigdata/newdisk/share/AllProjects']
 
 if __name__ == "__main__":
     start_time=time.time()
@@ -133,31 +133,31 @@ if __name__ == "__main__":
     # if strin.isdigit():
     #     thrNum = int(strin)
 
-    # for srcDir in srcDirs:        
-    #     for file_path in getFiles(srcDir):
-    #         # print(file_path)
-    #         try:
-    #             rid = file_path.rindex('.')
-    #             type = file_path[rid:]
-    #             if not type in validTypes:
-    #                 continue
-    #         except ValueError:
-    #             continue
-            
-    #         allfiles.append(file_path)
+    for src_path in srcPaths:               
+        for file_path in getFiles(src_path):
+            # print(file_path)
+            try:
+                type=file_path.rsplit('.',1)[-1]
+                print("type is ",type)
+                if not type in validTypes:
+                    continue
+            except ValueError:
+                continue            
+            allfiles.append(file_path)
     
-    for file_path in getFiles(prefix):
-        print("file_path is ",file_path)
-        try:
-            # rid = file_path.rindex('.')
-            # type = file_path[rid:]
-            type=file_path.rsplit('.',1)[-1]
-            print("type is ",type)
-            if not type in validTypes:
-                continue
-        except ValueError:
-            continue
-        allfiles.append(file_path)
+    # for file_path in getFiles(prefix):
+    #     print("file_path is ",file_path)
+    #     try:
+    #         # rid = file_path.rindex('.')
+    #         # type = file_path[rid:]
+    #         type=file_path.rsplit('.',1)[-1]
+    #         print("type is ",type)
+    #         if not type in validTypes:
+    #             continue
+    #     except ValueError:
+    #         continue
+    #     allfiles.append(file_path)
+
     # vocab = readVocabFile(vocabPath)
     vocab=initVocab()
     # out_file=open(outPath,'a')
@@ -218,7 +218,8 @@ if __name__ == "__main__":
             # updateVocab(vocab,tokens)
             tkstr = tokens2string(tokens)
             updateVocabLoc(vocab, tokens, loc)
-            vocabValMat.append([vocab[token][0] for token in tokens])
+            if not loc.startswith(excludePrefix):
+                vocabValMat.append([vocab[token][0] for token in tokens])
             debug_tkseq.write(tkstr+'\n')
             # persist_tkseq.write(tkstr+'\n')
 

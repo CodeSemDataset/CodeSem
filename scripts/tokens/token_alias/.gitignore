@@ -1,0 +1,10 @@
+.vscode
+**/input
+**/output
+**/datasets
+**/test*
+**/debug*
+**/resource
+
+*.pyc
+!.gitignore

@@ -16,15 +16,16 @@ from clang.cindex import TokenKind, TranslationUnit
 import sys
 import csv
 # import pandas as pd
+import multiprocessing
 
 sys.path.extend(['.','..'])
 from queue import PriorityQueue
-from pack.util import readVocabFile, refineMyTokens, methodDefs
+from pack.util import setVocab, refineMyTokens, methodDefs
 from pack.config import *
 # TODO
 # mutable arguments
 outDir = r'out/'
-inputDir = sys.argv[1]
+csvInDir = sys.argv[1]
 vocabPath = r'out/vocab.txt'
 # srcPrefix = r'/home/shared/projects/'
 arg_len = len(sys.argv)
@@ -77,7 +78,7 @@ def getFiles(path):
 #         res = res + str(it) + ' '       
 #     return res
 
-def getTu(path):
+def getTu(path,errors):
     try:
         rid = path.rindex('.')
         type = path[rid:]
@@ -89,8 +90,7 @@ def getTu(path):
         return TranslationUnit.from_source(path, args)
     except BaseException as bex:
         print(bex)
-        msg="tu error: {} in {} \n".format(bex,path)
-        debug.write(msg)
+        msg="tu error: {} in {} \n".format(bex,path)        
         errors.write(msg)
         return None
 
@@ -123,12 +123,12 @@ def getMyTokens(variable,tu):
     mytokens=refineMyTokens(tokens)  
     return mytokens
 
-def getSeq(variable):
+def getSeq(variable,vocab,errors):
     id=0
     index=-1
     # vocab_val_seq=[]
     val_seq=''
-    tu=getTu(variable.path)
+    tu=getTu(variable.path,errors)
     if not tu:
         return None
     mytokens=getMyTokens(variable,tu)
@@ -184,25 +184,14 @@ def getVar(row,which,label):
 #     raw_scope = row[4].split('-')
 #     scope = (int(raw_scope[0]), int(raw_scope[1]))
 #     return Variable(name,total_path,def_line,func_name,scope,label)
-def main(data):
-    pass 
-
-if __name__ == "__main__":
-    vocab = readVocabFile(vocabPath)
-    if len(vocab) <= 6:
-        sys.exit(1,"vocab is empty")
-    if not os.path.exists(outDir):
-            os.makedirs(outDir)  
-    debug = open(outDir+'dbg_eq.txt', 'w')
-    errors = open(outDir+'errors_eq.txt', 'w')
-
-    for tp in getFiles(inputDir):
+def main(csvfiles,vocab):
+    for tp in csvfiles:
         # csv_file_name=tp[1]
         variables = []
         if not tp[1].endswith('.csv'):
         # if not tp[1].endswith('.xlsx'):
             continue
-        eq_path = tp[0] + '/' + tp[1]
+        eq_path = os.path.join(tp[0],tp[1]) 
         print('csv path: ' + eq_path)
         name_list=tp[1].split('_')
         which = name_list[0].lower()
@@ -212,9 +201,9 @@ if __name__ == "__main__":
         # else:
         #     label=0
         label=int(name_list[2]=='equal')
-        debug = open(outDir+out_name+'_dbg_eq.txt', 'w')
-        errors = open(outDir+out_name+'_errors_eq.txt', 'w')       
-        with open(outDir + out_name + '_index.tsv', 'w', newline='') as tsv_file:
+        debug = open(os.path.join(outDir,out_name+'_dbg_eq.txt'), 'w')
+        errors = open(os.path.join(outDir,out_name+'_errors_eq.txt'), 'w')       
+        with open(os.path.join(outDir,out_name+'_id.tsv'), 'w', newline='') as tsv_file:
             tsv_w = csv.writer(tsv_file, delimiter='\t')
             tsv_w.writerow(['code_1', 'code_2', 'label'])
 
@@ -233,25 +222,50 @@ if __name__ == "__main__":
                     mystr2 = var2.path + ' ' + str(var2.func_scope)                            
 
                     print("name1: %s, mystr1:%s, name2:%s, mystr2:%s "%(var1.name,mystr1,var2.name,mystr2))
-                    seq1=getSeq(var1)
+                    seq1=getSeq(var1,vocab,errors)
                     # print(" %s %s\n get seq def 1 in main"%(seq_def1[0],seq_def1[1]))             
-                    seq2=getSeq(var2)  
+                    seq2=getSeq(var2,vocab,errors)  
                     # print(" %s %s\n get seq def 2 in main"%(seq_def2[0],seq_def2[1]))  
                     if not seq1 or not seq2:
                         continue           
                     tsv_row=[seq1,seq2]
-                
-                    # if not (defUseLs1 and defUseLs2):
-                    #     continue
-                    #                 
+                               
                     tsv_row.append(var1.label)
                     tsv_w.writerow(tsv_row)
                     
-                    debug.write("{} * {} ** tsv row: {} ****\n{}\n".format(var1.name, var2.name, mystr1 + ' ' + mystr2, tsv_row))               
+                    # debug.write("{} * {} ** tsv row: {} ****\n{}\n".format(var1.name, var2.name, mystr1 + ' ' + mystr2, tsv_row))               
                     print("write tsv row end")                                      
                 
         debug.close()
-        errors.close()        
+        errors.close()
+
+if __name__ == "__main__":
+    # vocab = readVocabFile(vocabPath)
+    vocab=multiprocessing.Manager().dict()
+    setVocab(vocabPath,vocab)
+    if len(vocab) <= 6:
+        sys.exit(1,"vocab is empty")
+    if not os.path.exists(outDir):
+            os.makedirs(outDir)  
+    files=[]  
+    processes=[]  
+    cpu_cnt=multiprocessing.cpu_count()   
+    # machine_verify = open(os.path.join(OutDir,'machine_verify.txt'), 'w') 
+    pid_list=open(os.path.join(outDir,'equivalence_pid_list.txt'),'w')
+    for tp in getFiles(csvInDir):            
+        if not tp[1].endswith('.csv'):
+            continue
+        files.append(tp)
+    for i in range(cpu_cnt):
+        if i>=len(files):
+            break
+        p = multiprocessing.Process(target=main, args=(files[i:len(files):cpu_cnt], vocab))
+        p.start()
+        processes.append(p)
+        pid_list.write("pid: {} and name: {}\n".format(p.pid,p.name))
+    for p in processes:
+        p.join()  
+        
     thisFile=os.path.abspath(__file__)
     copy_file(thisFile,outDir)
     

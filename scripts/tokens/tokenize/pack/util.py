@@ -1,3 +1,4 @@
+#!/usr/bin/env python3.7
 # -*-coding:utf-8-*-
 import os
 import re
@@ -8,7 +9,7 @@ from clang.cindex import TokenKind, CursorKind, TranslationUnit, Config
 
 conf=Config()
 vocabPreLen=0
-minNum=2
+minNum=12
 
 def get_encoding_type(fileName):
     with open(fileName, 'rb') as f:
@@ -22,6 +23,8 @@ def my_preorder(cursor):
         if cursor.kind != CursorKind.CXX_METHOD and cursor.kind != CursorKind.FUNCTION_DECL:
             for child in cursor.get_children():
                 yield from my_preorder(child)
+                # for descendant in my_preorder(child):
+                #     yield descendant
         # for child in cursor.get_children():
         #     for descendant in my_preorder(child):
         #         yield descendant
@@ -43,42 +46,47 @@ def readVocabFile(file):
                     continue
                 vocab[key] = [id,minNum,''] #id and key count and debug
                 id += 1
-        vocabPreLen = len(vocab)
+        # vocabPreLen = len(vocab)
     except FileNotFoundError as fnfe:
         print(fnfe)
-        vocabPreLen = 0
+        # vocabPreLen = 0d
         # with open(file, 'w') as vocab_init:
         #     for key in vocab:
         #         vocab_init.write(key+"\n")
     # vocabPreLen=len(vocab)
     return vocab
 
-def writeVocabFile(file,vocab):
-    global minNum
-    debug_vocab=open('debug_vocab.txt','w')
-    with open(file,'a') as vocab_file:
-        key_ls=list(vocab.keys())
-        for i in range(vocabPreLen,len(key_ls)):
-            key=key_ls[i]
-            if vocab[key][1]>=minNum:
-                vocab_file.write(key+"\n")
-            debug_vocab.write(key+': '+str(vocab[key][1])+' '+str(vocab[key][2])+'\n')
-    debug_vocab.close()
+def initVocab():
+    vocab = {"'<pad>_'": [0,minNum,''], "'<EOS>_'": [1,minNum,''], "'[CLS]_'": [2,minNum,''],
+             "'[SEP]_'": [3,minNum,''], "'[MASK]_'": [4,minNum,''], "'[UNK]_'": [5,minNum,'']}
+    return vocab
 
-def writeOutFiles(file_v,file_t,vocab,vocab_val_mat):
+# def writeVocabFile(file,vocab):
+#     global minNum
+#     debug_vocab=open('debug_vocab.txt','w')
+#     with open(file,'a') as vocab_file:
+#         key_ls=list(vocab.keys())
+#         for i in range(vocabPreLen,len(key_ls)):
+#             key=key_ls[i]
+#             if vocab[key][1]>=minNum:
+#                 vocab_file.write(key+"\n")
+#             debug_vocab.write(key+' '+str(vocab[key][1])+' '+str(vocab[key][2])+'\n')
+#     debug_vocab.close()
+
+def writeOutFiles(path_v,path_t,vocab,vocab_val_mat):
     global minNum
     # debug_tkseq = open('debug_tkseq.txt', 'w')
-    debug_vocab = open('debug_vocab.txt', 'w')
+    debug_vocab = open(path_v.rsplit('/',1)[0]+'/debug_vocab.txt', 'w')
     key_ls = list(vocab.keys())
 
-    with open(file_v,'w') as vocab_file:
-        for i in range(vocabPreLen,len(key_ls)):
+    with open(path_v,'w') as vocab_file:
+        for i in range(len(key_ls)):
             key=key_ls[i]
             if vocab[key][1]>=minNum:
                 vocab_file.write(key+"\n")
-            debug_vocab.write(key+' *** '+str(vocab[key][1])+' '+vocab[key][2]+'\n')
+            debug_vocab.write(key+'\t'+str(vocab[key][1])+'\t'+vocab[key][2]+'\n')
 
-    with open(file_t,'w') as out_file:
+    with open(path_t,'w') as out_file:
         for vals in vocab_val_mat:
             # tokens=[key_ls[val] for val in vals]
             tkstr=''
@@ -87,20 +95,24 @@ def writeOutFiles(file_v,file_t,vocab,vocab_val_mat):
                 if vocab[token][1]<minNum:
                     token="'[UNK]_'"
                 tkstr+=(token+' ')
-
-            out_file.write(tkstr+'\n')
+            if tkstr:
+                out_file.write(tkstr+'\n')
     debug_vocab.close()
 
 def handleSpelling(token_info):
     res=[]
-    spelling=token_info.spelling.strip('\\')
+    try:
+        spelling=token_info.spelling.strip('\\')
+    except Exception:
+        return ["'[UNK]_'"]
+    # spelling=token_info.spelling.strip('\\')
     spelling = re.sub(r'\s', ' ', spelling).strip()
     # print('token kind spelling ', token.kind, spelling)
     if token_info.kind == TokenKind.COMMENT:
         res.append('//')
-    elif token_info.kind == TokenKind.LITERAL:
+    elif token_info.kind == TokenKind.LITERAL:        
         if spelling.endswith('\'') or spelling.endswith('\"'):
-            # spelling=re.sub(r'\\n|\\t|\\r',' ',spelling) #\n \r \t(，)
+            # spelling=re.sub(r'\\n|\\t|\\r',' ',spelling) #所有的字符\n \r \t(是纯字符，不是换行和制表符)都用空格替换
             prefix=''
             lid = spelling.find(spelling[-1])
             if lid >= 0 and lid != len(spelling) - 1:
@@ -113,38 +125,31 @@ def handleSpelling(token_info):
             spelling = re.sub(r'[^\w\\]', r' \g<0> ', spelling)
             spelling = re.sub(r'\\ ([\47"])', r'\\\1', spelling)
 
-            # spelling = re.sub(r'([^\\]?)([^\w\\])', r'\1 \2 ', spelling)
-
-            for word in spelling.split():  # split()
+            for word in spelling.split():  # split()去除所有的空白符
                 res.append(word)
         else:
             res.append(spelling)
     # elif token.kind == TokenKind.PUNCTUATION:
-    #     for word in spelling.strip('\\').split():  # split()
+    #     for word in spelling.strip('\\').split():  # split()去除所有的空白符
     #         res.append(word)
     else:
         res.append(spelling)
+    return res
+
+def refineTokens(token_infos):
+    res=[]
+    for token_info in token_infos:
+        for word in handleSpelling(token_info):
+            res.append(word)
     return res
 
 def refineMyTokens(token_infos):
     res=[]
     for token_info in token_infos:
         for word in handleSpelling(token_info):
-            res.append((word,token_info.kind,token_info.location))
+            res.append([word,token_info.kind,token_info.location])
     return res
 
-# def updateVocab(vocab,tokens):
-#     for token in tokens:
-#
-#         if not token in vocab:
-#             l = len(vocab)
-#             vocab[token] = [l,1,'']
-#         else:
-#             vocab[token][1]+=1
-#         # for word in handleSpelling(token):
-#         #     l = len(vocab)
-#         #     if not word in vocab:
-#         #         vocab[word] = l
 
 def updateVocabLoc(vocab, tokens, loc):
     for token in tokens:
@@ -159,6 +164,4 @@ def tokens2string(tokens):
     res=''
     for token in tokens:
         res += token + ' '
-
     return res
-   

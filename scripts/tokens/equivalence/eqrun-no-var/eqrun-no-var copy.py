@@ -160,8 +160,8 @@ def getVar(row,which,label):
         total_path = row[0]
     else:                    
         cur_path = row[0].lstrip('./') 
-        mid="%s_compare/"%(which)           
-        total_path = os.path.join(prefix,mid,cur_path) 
+        mid="%s/%s_compare/"%(which,which)           
+        total_path = prefix+ mid + cur_path
     
     name = ''
     def_line=-1
@@ -185,7 +185,7 @@ def getVar(row,which,label):
 #     scope = (int(raw_scope[0]), int(raw_scope[1]))
 #     return Variable(name,total_path,def_line,func_name,scope,label)
 def main(data):
-    pass 
+    
 
 if __name__ == "__main__":
     vocab = readVocabFile(vocabPath)
@@ -213,7 +213,33 @@ if __name__ == "__main__":
         #     label=0
         label=int(name_list[2]=='equal')
         debug = open(outDir+out_name+'_dbg_eq.txt', 'w')
-        errors = open(outDir+out_name+'_errors_eq.txt', 'w')       
+        errors = open(outDir+out_name+'_errors_eq.txt', 'w')
+        # valid_paths=[]
+        # preprocess the name, path and so on
+        # df = pd.read_excel(io=eq_path) ##默认读取sheet = 0的
+        # columns = df.columns.values.tolist() ### 获取excel 表头 ，第一行
+        # for idx, row in df.iterrows(): ### 迭代数据 以键值对的形式 获取 每行的数据          
+        #     if not columns or not row[columns[0]]:                    
+        #         continue
+        #     label=int(row[10])
+        #     var1=getVar(row,label)
+        #     var2=getVar(row[5:],label)                
+        #     variables.append(var1)                
+        #     variables.append(var2)   
+        #     for column in columns:
+        #         d_row[column] = row[column]
+        #         if column =='output_date':
+        #             s = str(row[column])
+        #             d_row[column] = s[:4]+'-'+s[4:6] + '-'+s[6:]
+        #         else:
+        #             d_row[column] = row[column]                
+
+        # data_xls = pd.read_excel(eq_path, index_col=0)
+        # csv_path="csv/%s.csv"%(out_name)
+        # data_xls.to_csv(csv_path, encoding='utf-8')
+        # with open(csv_path, 'r') as csv_file:
+               
+        print("read csv end\n")
         with open(outDir + out_name + '_index.tsv', 'w', newline='') as tsv_file:
             tsv_w = csv.writer(tsv_file, delimiter='\t')
             tsv_w.writerow(['code_1', 'code_2', 'label'])
@@ -228,28 +254,45 @@ if __name__ == "__main__":
                     if not row or not row[0]:                    
                         continue                                   
                     var1=getVar(row,which,label)
-                    var2=getVar(row[1:],which,label) 
-                    mystr1 = var1.path + ' ' + str(var1.func_scope)
-                    mystr2 = var2.path + ' ' + str(var2.func_scope)                            
+                    var2=getVar(row[1:],which,label)                
+                    # variables.append(var1)                
+                    # variables.append(var2) 
+            # for vp in valid_paths:
+            #     tsv_w.writerow([vp,'tsv'])
 
-                    print("name1: %s, mystr1:%s, name2:%s, mystr2:%s "%(var1.name,mystr1,var2.name,mystr2))
-                    seq1=getSeq(var1)
-                    # print(" %s %s\n get seq def 1 in main"%(seq_def1[0],seq_def1[1]))             
-                    seq2=getSeq(var2)  
-                    # print(" %s %s\n get seq def 2 in main"%(seq_def2[0],seq_def2[1]))  
-                    if not seq1 or not seq2:
-                        continue           
-                    tsv_row=[seq1,seq2]
+            # tsv_row = []
+            # for defuse in variables:
+            for id in range(0, len(variables), 2):
+                # tsv_row = []
+                print("len vars: "+str(len(variables)))
+                var1 = variables[id]
+                var2 = variables[id + 1]
+                # if id<len(variables)-1:
+                #     var2 = variables[id + 1]
+                # else:
+                #     var2=None
+                # if var1==None or var2==None:
+                #     continue
+                mystr1 = var1.path + ' ' + str(var1.func_scope)
+                mystr2 = var2.path + ' ' + str(var2.func_scope)                            
+
+                print("name1 mystr1 name2 mystr2: ",var1.name,mystr1,var2.name,mystr2)
+                seq1=getSeq(var1)
+                # print(" %s %s\n get seq def 1 in main"%(seq_def1[0],seq_def1[1]))             
+                seq2=getSeq(var2)  
+                # print(" %s %s\n get seq def 2 in main"%(seq_def2[0],seq_def2[1]))  
+                if not seq1 or not seq2:
+                    continue           
+                tsv_row=[seq1,seq2]
+               
+                # if not (defUseLs1 and defUseLs2):
+                #     continue
+                #                 
+                tsv_row.append(var1.label)
+                tsv_w.writerow(tsv_row)
                 
-                    # if not (defUseLs1 and defUseLs2):
-                    #     continue
-                    #                 
-                    tsv_row.append(var1.label)
-                    tsv_w.writerow(tsv_row)
-                    
-                    debug.write("{} * {} ** tsv row: {} ****\n{}\n".format(var1.name, var2.name, mystr1 + ' ' + mystr2, tsv_row))               
-                    print("write tsv row end")                                      
-                
+                debug.write("{} * {} ** tsv row: {} ****\n{}\n".format(var1.name, var2.name, mystr1 + ' ' + mystr2, tsv_row))               
+                print("write tsv row end")
         debug.close()
         errors.close()        
     thisFile=os.path.abspath(__file__)
