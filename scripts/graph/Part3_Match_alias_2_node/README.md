@@ -1,5 +1,3 @@
-# README
-
 This project is an extension of part2, besides generating AST(ggnn, sandwich), PDG-AST, PDG-TokenSequence, CFG-AST, CFG-TokenSequence, it can match the input alias to the specific node in above graphs.
 
 ## Build and run
