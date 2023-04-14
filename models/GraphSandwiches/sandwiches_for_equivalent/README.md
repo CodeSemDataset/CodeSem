@@ -1,9 +1,18 @@
-# Sandwiches model for  equivalence prediction
+# Graph Sandwiches model for equivalence prediction
 
-## Test the model
+## Generalized Pre-train
 
+```shell
+python SandwichEquiv.py -p 2 --pre_train
 ```
-python SandwichEquiv -p 2
+
+## Specialized Pre-train and Fine-tune
+We take the fine-tuning stage as an example. The difference between specialized pre-training and fine-tuning is the data used.
+```shell
+# train the model
+python SandwichEquiv.py -p 2 --pre_trained_model xxxx.pickle
+# test the model
+python SandwichEquiv.py -p 2 -r yyyy.pickle -tf test_file.json
 ```
 training arguments:  
 ```

@@ -9,9 +9,11 @@ import json
 import numpy as np
 import pickle
 import random
+import csv
 
 #from sklearn.metrics import precision_recall_fscore_support
 from sklearn.metrics import accuracy_score
+from sklearn.metrics import confusion_matrix
 
 from utils import MLP, ThreadedIterator, SMALL_NUMBER
 from timeit import default_timer as timer
@@ -35,7 +37,7 @@ class BaseSandwichEquiv(object):
 
             'lambda' : 0.1,
 
-            'vocabulary_size': 350000,
+            'vocabulary_size': 300000,
 
             # sandwich
             'sandwich_actions': ['rnn', 'ggnn', 'rnn', 'ggnn', 'rnn']
@@ -242,6 +244,8 @@ class BaseSandwichEquiv(object):
             self.ops["input_mask_edge_original_type_list"] = inputs["mask_edge_original_type_list"]
 
             self.ops['graph_representations_as_pair'] = tf.nn.embedding_lookup(params=self.ops['graph_representations'], ids=inputs["pair_idx"])
+            output_weights = tf.get_variable("output_weights",[2,2*self.params['hidden_size']],initializer=tf.truncated_normal_initializer(stddev=0.02))
+            output_bias = tf.get_variable("output_bias",[2],initializer=tf.zeros_initializer())
 
 
         with tf.variable_scope("objectives"):
@@ -259,15 +263,18 @@ class BaseSandwichEquiv(object):
             right_idx = inputs["pair_idx"][:, 1]
             right = tf.nn.embedding_lookup(params=self.ops['graph_representations'], ids=right_idx)
 
+            concat_left_right = tf.concat([left,right],axis = 1)
+            logits = tf.matmul(concat_left_right,output_weights,transpose_b=True)
+            logits = tf.nn.bias_add(logits,output_bias)
+            self.ops['probabilities'] = tf.nn.softmax(logits, axis=-1)
+            self.ops['cross_entropy_loss'] = tf.reduce_sum(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.cast(inputs['graph_labels'],tf.int32), logits=logits))
+
             d = tf.reduce_sum(tf.square(left - right), 1)
             d_sqrt = tf.sqrt(tf.maximum(d, 1e-9))
 
-            # labels: 1 if same, 0 if different
-            loss = (1 - inputs["graph_labels"]) * tf.square(tf.maximum(0., margin - d_sqrt)) + inputs["graph_labels"] * d
-            loss = 0.5 * tf.reduce_mean(loss)
 
             self.ops['d_sqrt'] = d_sqrt
-            self.ops['contrastive_loss'] = loss
+            self.ops['contrastive_loss'] = self.ops['cross_entropy_loss']
             self.ops['pair_labels'] = inputs["graph_labels"]
 
     def make_train_step(self):
@@ -318,8 +325,9 @@ class BaseSandwichEquiv(object):
             start_time = timer()
             print("Pre-Training Edge Mask Phase Begins.")
             for epoch in range(1, self.params['num_epochs'] + 1):
-                print("== Pre-Train Edge Mask Phase skips.")
-                break
+                if not self.args.pre_train:
+                    print("== Pre-Train Edge Mask Phase skips.")
+                    break
                 print("== Pre-Train Edge Mask Epoch %i ==" % epoch)
                 # run the training first
                 cross_entropy_loss = self.run_epoch("pre-train-edge-mask epoch %i" % epoch, [self.ops['edge_mask_cross-entropy_loss'], self.ops['pre-train_edge_mask_step']])
@@ -348,7 +356,8 @@ class BaseSandwichEquiv(object):
             print("time used for pre-training edge mask phase:",str(timedelta(seconds=end_time-start_time)))
 
             print("Loading the best model in the pre-training edge mask stage.")
-            # self.restore_model(self.best_edge_mask_pretrained_model_file)
+            if self.args.pre_train:
+                self.restore_model(self.best_edge_mask_pretrained_model_file)
 
             least_cross_entropy_loss = float("+inf")
             patience = 0
@@ -356,8 +365,9 @@ class BaseSandwichEquiv(object):
             start_time = timer()
             print("Pre-Training Node Mask Phase Begins.")
             for epoch in range(1, self.params['num_epochs'] + 1):
-                print("Pre-Training Node Mask Phase skips.")
-                break
+                if not self.args.pre_train:
+                    print("Pre-Training Node Mask Phase skips.")
+                    break
                 print("== Pre-Train Node Mask Epoch %i ==" % epoch)
                 # run the training first
                 cross_entropy_loss = self.run_epoch("pre-train-node-mask epoch %i" % epoch, [self.ops['node_mask_cross-entropy_loss'], self.ops['pre-train_node_mask_step']])
@@ -387,8 +397,10 @@ class BaseSandwichEquiv(object):
 
 
             print("Loading the best model in the pre-training stage.")
-            self.restore_model('./2022-03-08-02-13-22_396_node_mask_pretrained_model_best.pickle')
-            # self.restore_model(self.best_node_mask_pretrained_model_file)
+            if self.args.pre_train:
+                self.restore_model(self.best_node_mask_pretrained_model_file)
+            elif self.args.pre_trained_model:
+                self.restore_model(self.args.pre_trained_model)
             # print("Model verified.")
 
             least_contrastive_loss = float("+inf")
@@ -401,8 +413,8 @@ class BaseSandwichEquiv(object):
                 # break
                 print("== Fine-Tune Epoch %i ==" % epoch)
                 # run the training first
-                contrastive_loss, graph_representations, pair_labels, d_sqrt_all = self.run_epoch("fine-tune epoch %i" % epoch, [self.ops['contrastive_loss'],
-                                                                                 self.ops['graph_representations'],
+                contrastive_loss, probabilities, pair_labels, d_sqrt_all = self.run_epoch("fine-tune epoch %i" % epoch, [self.ops['contrastive_loss'],
+                                                                                 self.ops['probabilities'],
                                                                                  self.ops['pair_labels'],
                                                                                  self.ops['d_sqrt'],
                                                                                  self.ops['fine-tune_step']])
@@ -413,14 +425,14 @@ class BaseSandwichEquiv(object):
                     min_d = min(d_sqrt_all)
 
                 # run the validation second
-                contrastive_loss, test_graph_representations, pair_labels, d_sqrt_all = self.run_epoch("test epoch %i" % epoch, [self.ops['contrastive_loss'],
-                                                                                                                self.ops['graph_representations'],
+                contrastive_loss, test_probabilities, pair_labels, d_sqrt_all = self.run_epoch("test epoch %i" % epoch, [self.ops['contrastive_loss'],
+                                                                                                                self.ops['probabilities'],
                                                                                                                 self.ops['pair_labels'],
                                                                                                                 self.ops['d_sqrt']])
                 # print("[Test: current contrastive loss is %.5f]\n" % (contrastive_loss))
                 #precision, recall, f1, _ = self.__compute_precision_recall__(test_graph_representations, pair_labels)
                 #print("[Test: ranking loss: %.5f, precision: %.5f, recall: %.5f, and F1: %.5f]\n" % (contrastive_loss, precision, recall, f1))
-                accuracy_score = self.__compute_precision_recall__(test_graph_representations, pair_labels)
+                accuracy_score, acc_for_each_class = self.__compute_precision_recall__(test_probabilities, pair_labels)
                 print("[Test: ranking loss: %.5f, accuracy_score: %.5f]\n" % (contrastive_loss, accuracy_score))
 
                 if contrastive_loss < least_contrastive_loss:
@@ -539,8 +551,8 @@ class BaseSandwichEquiv(object):
                 for epoch in range(1, self.params['num_epochs'] + 1):
                     print("== Fine-Tune Epoch %i ==" % epoch)
                     # run the training first
-                    contrastive_loss, graph_representations, pair_labels, d_sqrt_all  = self.run_epoch("fine-tune epoch %i" % epoch, [self.ops['contrastive_loss'],
-                                                                                     self.ops['graph_representations'],
+                    contrastive_loss, probabilities, pair_labels, d_sqrt_all  = self.run_epoch("fine-tune epoch %i" % epoch, [self.ops['contrastive_loss'],
+                                                                                     self.ops['probabilities'],
                                                                                      self.ops['pair_labels'],
                                                                                      self.ops['d_sqrt'],
                                                                                      self.ops['fine-tune_step']])
@@ -551,14 +563,14 @@ class BaseSandwichEquiv(object):
                         min_d = min(d_sqrt_all)
 
                     # run the validation second
-                    contrastive_loss, test_graph_representations, pair_labels, d_sqrt_all = self.run_epoch("test epoch %i" % epoch, [self.ops['contrastive_loss'],
-                                                                                                                    self.ops['graph_representations'],
+                    contrastive_loss, test_probabilities, pair_labels, d_sqrt_all = self.run_epoch("test epoch %i" % epoch, [self.ops['contrastive_loss'],
+                                                                                                                    self.ops['probabilities'],
                                                                                                                     self.ops['pair_labels'],
                                                                                                                     self.ops['d_sqrt']])
                     # print("[Test: current contrastive loss is %.5f]\n" % (contrastive_loss))
                     #precision, recall, f1, _ = self.__compute_precision_recall__(test_graph_representations, pair_labels)
                     #print("[Test: ranking loss: %.5f, precision: %.5f, recall: %.5f, and F1: %.5f]\n" % (contrastive_loss,  precision, recall, f1))
-                    accuracy_score = self.__compute_precision_recall__(test_graph_representations, pair_labels)
+                    accuracy_score, acc_for_each_class = self.__compute_precision_recall__(test_probabilities, pair_labels)
                     print("[Test: ranking loss: %.5f, accuracy_score: %.5f]\n" % (contrastive_loss, accuracy_score))
 
                     if contrastive_loss < least_contrastive_loss:
@@ -590,15 +602,21 @@ class BaseSandwichEquiv(object):
 
             print("\nTesting Phase Begins.")
             # run the validation second
-            contrastive_loss, test_graph_representations, pair_labels, d_sqrt_all = self.run_epoch("test epoch", [self.ops['contrastive_loss'],
-                                                                                                          self.ops['graph_representations'],
+            contrastive_loss, test_probabilities, pair_labels, d_sqrt_all = self.run_epoch("test epoch", [self.ops['contrastive_loss'],
+                                                                                                          self.ops['probabilities'],
                                                                                                           self.ops['pair_labels'],
                                                                                                           self.ops['d_sqrt']])
-            # print("[Test: current contrastive loss is %.5f]\n" % (contrastive_loss))
-            #precision, recall, f1, _ = self.__compute_precision_recall__(test_graph_representations, pair_labels)
-            #print("[Test: ranking loss: %.5f, precision: %.5f, recall: %.5f, and F1: %.5f]\n" % (contrastive_loss, precision, recall, f1))
-            accuracy_score = self.__compute_precision_recall__(test_graph_representations, pair_labels)
-            print("[Test: ranking loss: %.5f, accuracy_score: %.5f]\n" % (contrastive_loss, accuracy_score))
+            with open('test_result.tsv', 'w') as f:
+                tsv_writer = csv.writer(f, delimiter='\t')
+                for p in test_probabilities:
+                    tsv_writer.writerow(p)
+            with open('test_labels.txt', 'w') as f:
+                for i in pair_labels:
+                    f.write(str(i) + '\n')
+            accuracy_score, acc_for_each_class = self.__compute_precision_recall__(test_probabilities, pair_labels)
+            print(
+                "[Test: ranking loss: %.5f, accuracy_score: %.5f, acc_for_equi: %.5f, acc_for_inequi: %.5f]\n" % (
+                    contrastive_loss, accuracy_score, acc_for_each_class[1], acc_for_each_class[0]))
             print("Fine-Tuning Phase Finished.")
 
 
@@ -653,35 +671,13 @@ class BaseSandwichEquiv(object):
         else:
             return total_loss, graph_representations, pair_labels, d_sqrt_sum
 
-    def __compute_precision_recall__(self, test_graph_representations, ground_truth):
-        class GraphPair:
-            def __init__(self, embedding1, embedding2, identity):
-                self.embedding1 = embedding1
-                self.embedding2 = embedding2
-                self.identity = identity
-
-            def compute_distance(self):
-                self.distance = np.sqrt(np.sum((np.asarray(self.embedding1, dtype=np.float32)-np.asarray(self.embedding2, dtype=np.float32))**2))
-
-        graphs = []
-        for idx in range(int(len(test_graph_representations) / 2)):
-            graphs.append(GraphPair(test_graph_representations[idx], test_graph_representations[idx * 2 + 1], idx))
-
-        for graph in graphs:
-            graph.compute_distance()
-
-        predicted_labels = [0] * len(graphs)
-        graphs.sort(key=lambda x: x.distance, reverse=False)
-        for idx, graph in enumerate(graphs):
-            if graph.distance < self.margin:
-                predicted_labels[graph.identity] = 1
-            else:
-                break
-
-        true_labels = []
-        for l in ground_truth:
-            true_labels.append(int(l))
-        return accuracy_score(true_labels, predicted_labels)
+    def __compute_precision_recall__(self, test_probabilities, ground_truth):
+        true_labels = list(map(int, ground_truth))
+        predicted_labels = np.argmax(test_probabilities, axis=-1)
+        assert len(true_labels) == len(predicted_labels)
+        matrix = confusion_matrix(true_labels, predicted_labels)
+        acc_for_each_class = matrix.diagonal() / matrix.sum(axis=1)
+        return accuracy_score(true_labels, predicted_labels), acc_for_each_class
 
     def initialize_model(self) -> None:
         init_op = tf.group(tf.global_variables_initializer(),

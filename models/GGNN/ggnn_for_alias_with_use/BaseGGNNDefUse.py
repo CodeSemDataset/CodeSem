@@ -1,9 +1,3 @@
-'''
-Created on Sep 21, 2021
-
-@author: chizhang
-'''
-
 from typing import List, Any, Sequence
 
 # import tensorflow as tf
@@ -15,9 +9,11 @@ import json
 import numpy as np
 import pickle
 import random
+import csv
 
 # from sklearn.metrics import precision_recall_fscore_support
 from sklearn.metrics import accuracy_score
+from sklearn.metrics import confusion_matrix
 
 from utils import MLP, ThreadedIterator, SMALL_NUMBER
 
@@ -40,11 +36,9 @@ class BaseGGNNDefUse(object):
 
             'random_seed': 0,
 
-            # 'margin' : 20,
-
             'lambda' : 0.1,
 
-            'vocabulary_size': 100,
+            'vocabulary_size': 300000,
         }
 
     def __init__(self, args, margin):
@@ -248,6 +242,9 @@ class BaseGGNNDefUse(object):
             self.ops["use_nodes"] = tf.nn.embedding_lookup(params=self.ops['final_node_representations'], ids=inputs["use_nodes"])
 
             self.ops["left_var"], self.ops["right_var"] = self.compute_alias(inputs, self.ops["def_node"], self.ops["use_nodes"])
+            output_weights = tf.get_variable("output_wegiths", [3,2 * self.params['hidden_size']],initializer=tf.truncated_normal_initializer(stddev=0.02))
+            output_bias = tf.get_variable("output_bias", [3], initializer=tf.zeros_initializer())
+
 
         with tf.variable_scope("objectives"):
             # Step 1: pre-train edge mask
@@ -260,15 +257,18 @@ class BaseGGNNDefUse(object):
             left = self.ops["left_var"]
             right = self.ops["right_var"]
 
+            concat_left_right = tf.concat([left,right],axis=1)
+            logits = tf.matmul(concat_left_right,output_weights,transpose_b=True)
+            logits = tf.nn.bias_add(logits, output_bias)
+            self.ops['probabilities'] = tf.nn.softmax(logits, axis=-1)
+            self.ops['cross_entropy_loss'] = tf.reduce_sum(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.cast(inputs['graph_labels'],tf.int32),logits=logits))
+
             d = tf.reduce_sum(tf.square(left - right), 1)
             d_sqrt = tf.sqrt(tf.maximum(d, 1e-9))
 
-            # labels: 1 if same, 0 if different
-            loss = (1 - inputs["graph_labels"]) * tf.square(tf.maximum(0., margin - d_sqrt)) + inputs["graph_labels"] * d
-            loss = 0.5 * tf.reduce_mean(loss)
 
             self.ops['d_sqrt'] = d_sqrt
-            self.ops['contrastive_loss'] = loss
+            self.ops['contrastive_loss'] = self.ops['cross_entropy_loss']
             self.ops["result_labels"] = inputs["graph_labels"]
             self.ops["var_representations"] = tf.concat([self.ops["left_var"], self.ops["right_var"]], axis=0)
 
@@ -316,8 +316,9 @@ class BaseGGNNDefUse(object):
 
             print("Pre-Training Edge Mask Phase Begins.")
             for epoch in range(1, self.params['num_epochs'] + 1):
-                print("Pre-Training Edge Mask Phase Skips.")
-                break
+                if not self.args.pre_train:
+                    print("Pre-Training Edge Mask Phase Skips.")
+                    break
                 print("== Pre-Train Edge Mask Epoch %i ==" % epoch)
                 # run the training first
                 cross_entropy_loss = self.run_epoch("pre-train-edge-mask epoch %i" % epoch, [self.ops['edge_mask_cross-entropy_loss'], self.ops['pre-train_edge_mask_step']])
@@ -345,15 +346,17 @@ class BaseGGNNDefUse(object):
 
 
             print("Loading the best model in the pre-training edge mask stage.")
-            # self.restore_model(self.best_edge_mask_pretrained_model_file)
+            if self.args.pre_train:
+                self.restore_model(self.best_edge_mask_pretrained_model_file)
 
             least_cross_entropy_loss = float("+inf")
             patience = 0
 
             print("Pre-Training Node Mask Phase Begins.")
             for epoch in range(1, self.params['num_epochs'] + 1):
-                print("Pre-Training Node Mask Phase Skips.")
-                break
+                if not self.args.pre_train:
+                    print("Pre-Training Node Mask Phase Skips.")
+                    break
                 print("== Pre-Train Node Mask Epoch %i ==" % epoch)
                 # run the training first
                 cross_entropy_loss = self.run_epoch("pre-train-node-mask epoch %i" % epoch, [self.ops['node_mask_cross-entropy_loss'], self.ops['pre-train_node_mask_step']])
@@ -381,8 +384,10 @@ class BaseGGNNDefUse(object):
 
 
             print("Loading the best model in the pre-training stage.")
-            self.restore_model('./2021-10-31-11-13-22_12_node_mask_pretrained_model_best.pickle')
-            # self.restore_model(self.best_node_mask_pretrained_model_file)
+            if self.args.pre_train:
+                self.restore_model(self.best_node_mask_pretrained_model_file)
+            elif self.args.pre_trained_model:
+                self.restore_model(self.args.pre_trained_model)
             # print("Model verified.")
 
             least_contrastive_loss = float("+inf")
@@ -395,8 +400,8 @@ class BaseGGNNDefUse(object):
                 # break
                 print("== Fine-Tune Epoch %i ==" % epoch)
                 # run the training first
-                contrastive_loss, graph_representations, labels, d_sqrt_all = self.run_epoch("fine-tune epoch %i" % epoch, [self.ops['contrastive_loss'],
-                                                                                                        self.ops['var_representations'],
+                contrastive_loss, probabilities, labels, d_sqrt_all = self.run_epoch("fine-tune epoch %i" % epoch, [self.ops['contrastive_loss'],
+                                                                                                        self.ops['probabilities'],
                                                                                                         self.ops["result_labels"],
                                                                                                         self.ops["d_sqrt"],
                                                                                                         self.ops['fine-tune_step'],
@@ -408,13 +413,13 @@ class BaseGGNNDefUse(object):
                     min_d = min(d_sqrt_all)
 
                 # run the validation second
-                contrastive_loss, test_graph_representations, labels, d_sqrt_all = self.run_epoch("test epoch %i" % epoch, [self.ops['contrastive_loss'],
-                                                                                                        self.ops['var_representations'],
+                contrastive_loss, test_probabilities, labels, d_sqrt_all = self.run_epoch("test epoch %i" % epoch, [self.ops['contrastive_loss'],
+                                                                                                        self.ops['probabilities'],
                                                                                                         self.ops['result_labels'],
                                                                                                         self.ops['d_sqrt']])
                 # print("test_graph_representations",graph_representations)
                 #precision, recall, f1, _ = self.__compute_precision_recall__(test_graph_representations, labels)
-                accuracy_score = self.__compute_precision_recall__(test_graph_representations, labels)
+                accuracy_score, acc_for_each_class = self.__compute_precision_recall__(test_probabilities, labels)
                 #print("[Test: ranking loss: %.5f, precision: %.5f, recall: %.5f, and F1: %.5f]\n" % (contrastive_loss, precision, recall, f1))
                 print("[Test: ranking loss: %.5f, accuracy_score: %.5f]\n" % (contrastive_loss, accuracy_score))
 
@@ -425,9 +430,6 @@ class BaseGGNNDefUse(object):
 
                     self.save_model(self.best_model_file)
 
-                    graph_representations.extend(test_graph_representations)
-                    with open(os.path.join(self.log_dir, "fine-tune_epoch%s_graphs.json" %epoch), "w") as f:
-                        json.dump(graph_representations, f)
                 else:
                     patience += 1
 
@@ -455,8 +457,8 @@ class BaseGGNNDefUse(object):
                 print("\nPrecise Fine-Tuning Phase Begins.")
                 for epoch in range(1, self.params['num_epochs'] + 1):
                     print("== Fine-Tune Epoch %i ==" % epoch)
-                    contrastive_loss, graph_representations, labels, d_sqrt_all = self.run_epoch("fine-tune epoch %i" % epoch, [self.ops['contrastive_loss'],
-                                                                                                        self.ops['var_representations'],
+                    contrastive_loss, probabilities, labels, d_sqrt_all = self.run_epoch("fine-tune epoch %i" % epoch, [self.ops['contrastive_loss'],
+                                                                                                        self.ops['probabilities'],
                                                                                                         self.ops["result_labels"],
                                                                                                         self.ops["d_sqrt"],
                                                                                                         self.ops['fine-tune_step'],
@@ -467,13 +469,13 @@ class BaseGGNNDefUse(object):
                     if (min(d_sqrt_all) < min_d):
                         min_d = min(d_sqrt_all)
 
-                    contrastive_loss, test_graph_representations, labels, d_sqrt_all = self.run_epoch("test epoch %i" % epoch, [self.ops['contrastive_loss'],
-                                                                                                        self.ops['var_representations'],
+                    contrastive_loss, test_probabilities, labels, d_sqrt_all = self.run_epoch("test epoch %i" % epoch, [self.ops['contrastive_loss'],
+                                                                                                        self.ops['probabilities'],
                                                                                                         self.ops['result_labels'],
                                                                                                         self.ops['d_sqrt']])
                     # print("test_graph_representations",graph_representations)
                     #precision, recall, f1, _ = self.__compute_precision_recall__(test_graph_representations, labels)
-                    accuracy_score = self.__compute_precision_recall__(test_graph_representations, labels)
+                    accuracy_score, acc_for_each_class = self.__compute_precision_recall__(test_probabilities, labels)
                     #print("[Test: ranking loss: %.5f, precision: %.5f, recall: %.5f, and F1: %.5f]\n" % (contrastive_loss, precision, recall, f1))
                     print("[Test: ranking loss: %.5f, accuracy_score: %.5f]\n" % (contrastive_loss, accuracy_score))
 
@@ -484,9 +486,6 @@ class BaseGGNNDefUse(object):
 
                         self.save_model(self.precise_best_model_file)
 
-                        graph_representations.extend(test_graph_representations)
-                        with open(os.path.join(self.log_dir, "fine-tune_epoch%s_graphs.json" %epoch), "w") as f:
-                            json.dump(graph_representations, f)
                     else:
                         patience += 1
 
@@ -505,15 +504,24 @@ class BaseGGNNDefUse(object):
         with self.graph.as_default():
             print("\nTesting Phase Begins.")
             # run the validation second
-            contrastive_loss, test_graph_representations, labels, d_sqrt_all = self.run_epoch("test epoch", [self.ops['contrastive_loss'],
-                                                                                                      self.ops['var_representations'],
+            contrastive_loss, test_probabilities, labels, d_sqrt_all = self.run_epoch("test epoch", [self.ops['contrastive_loss'],
+                                                                                                      self.ops['probabilities'],
                                                                                                       self.ops['result_labels'],
                                                                                                       self.ops['d_sqrt']])
-            # print("[Test: current contrastive loss is %.5f]\n" % (contrastive_loss))
-            #precision, recall, f1, _ = self.__compute_precision_recall__(test_graph_representations, labels)
-            accuracy_score = self.__compute_precision_recall__(test_graph_representations, labels)
-            #print("[Test: ranking loss: %.5f, precision: %.5f, recall: %.5f, and F1: %.5f]\n" % (contrastive_loss, precision, recall, f1))
-            print("[Test: ranking loss: %.5f, accuracy_score: %.5f]\n" % (contrastive_loss, accuracy_score))
+            with open('test_result.tsv', 'w') as f:
+                tsv_writer = csv.writer(f, delimiter='\t')
+                for p in test_probabilities:
+                    for q in p:
+                        tsv_writer.writerow(q)
+            with open('test_labels.tsv', 'w') as f:
+                for i in labels:
+                    for j in i:
+                        f.write(str(j) + '\n')
+            accuracy_score, acc_for_each_class = self.__compute_precision_recall__(test_probabilities, labels)
+            print(
+                "[Test: ranking loss: %.5f, accuracy_score: %.5f, acc_for_must: %.5f, acc_for_may: %.5f, acc_for_must_not: %.5f]\n" % (
+                    contrastive_loss, accuracy_score, acc_for_each_class[1], acc_for_each_class[2],
+                    acc_for_each_class[0]))
             print("Fine-Tuning Phase Finished.")
 
     def run_epoch(self, epoch_name: str, operators):
@@ -555,14 +563,13 @@ class BaseGGNNDefUse(object):
             if self.ops['edge_mask_cross-entropy_loss'] in operators or self.ops['node_mask_cross-entropy_loss'] in operators:
                 loss = result[0]
             elif self.ops['contrastive_loss'] in operators:
-                loss, graphs, label, d_sqrt = result[0], result[1], result[2], result[3]
-                graph_representations.append(graphs.tolist()) # numpy array to lists
+                loss, probabilities, label, d_sqrt = result[0], result[1], result[2], result[3]
+                graph_representations.append(probabilities.tolist()) # numpy array to lists
                 labels.append(label.tolist())
                 d_sqrt_sum.extend(d_sqrt)
 
             if self.ops['final_node_representations'] in operators:
                 node_represenation = result[5]
-                # print(node_represenation.tolist())
 
             print("Running %s, batch %i. Loss so far: %.4f." % (epoch_name, step, loss), end='\r')
 
@@ -572,43 +579,19 @@ class BaseGGNNDefUse(object):
         else:
             return total_loss, graph_representations, labels, d_sqrt_sum
 
-    def __compute_precision_recall__(self, test_graph_representations, ground_truth):
-        class Graph:
-            def __init__(self, embedding1, embedding2, identity):
-                self.embedding1 = embedding1
-                self.embedding2 = embedding2
-                self.identity = identity
-
-            def compute_distance(self):
-                self.distance = np.sqrt(np.sum((np.asarray(self.embedding1, dtype=np.float32)-np.asarray(self.embedding2, dtype=np.float32))**2))
-
-        graphs = []
+    def __compute_precision_recall__(self, test_probabilities, ground_truth):
         true_labels = []
-        idx = 0
-        for one_batch in zip(test_graph_representations, ground_truth):
-            for vars in zip(one_batch[0][:len(one_batch[1])], one_batch[0][len(one_batch[1]):]):
-                graphs.append(Graph(vars[0], vars[1], idx))
-                idx = idx + 1
-            for l in one_batch[1]:
-                true_labels.append(int(l))
-        # for idx, vars in enumerate(zip(test_graph_representations[:len(ground_truth)], test_graph_representations[len(ground_truth):])):
-        #     graphs.append(Graph(vars[0], vars[1], idx))
-
-        for graph in graphs:
-            graph.compute_distance()
-
-        predicted_labels = [0] * len(graphs)
-        graphs.sort(key=lambda x: x.distance, reverse=False)
-        for idx, graph in enumerate(graphs):
-            if graph.distance < self.margin:
-                predicted_labels[graph.identity] = 1
-            else:
-                break
-        # return precision_recall_fscore_support(ground_truth, predicted_labels, average='binary')
-        # print(true_labels)
-        # print(predicted_labels)
-        #return precision_recall_fscore_support(true_labels, predicted_labels, average='binary')
-        return accuracy_score(true_labels, predicted_labels)
+        for label in ground_truth:
+            true_labels.extend(label)
+        true_labels = [int(l) for l in true_labels]
+        predicted_labels = []
+        for pro in test_probabilities:
+            predicted_labels.extend(pro)
+        predicted_labels = np.argmax(predicted_labels, axis=-1)
+        assert len(true_labels) == len(predicted_labels)
+        matrix = confusion_matrix(true_labels, predicted_labels)
+        acc_for_each_class = matrix.diagonal() / matrix.sum(axis=1)
+        return accuracy_score(true_labels, predicted_labels), acc_for_each_class
 
     def initialize_model(self) -> None:
         init_op = tf.group(tf.global_variables_initializer(),

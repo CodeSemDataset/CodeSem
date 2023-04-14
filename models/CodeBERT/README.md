@@ -1,18 +1,12 @@
-# How to train CuBERT
-
-## Tokenization
-
-```shell
-python create_pretraining_data.py --vocab_file=pre_train_data/vocab.txt --input_file=pre_train_data/tkseq.txt --output_file=pre_train_data/output/data
-```
+# How to train CodeBERT
 
 ## Generalized Pre-train
 
 ```shell
-python run_pretraining.py --bert_config_file=bert_config.json --do_train=true --do_eval=true --output_dir=pre_trained_output --input_file=pre_train_data/output/data
+python codebert-pre-training.py --bert_config_file=bert_config.json --task_name=codebert --do_train=true --do_eval=true --output_dir=codebert-pretrain-output-model/ --input_file=pre_train_data/codebert_model_input.tsv
 ```
 
-## Specialized Pre-train and Fine-tune
+## Specialized Pre-Train and Fine-tune
 
 We take the fine-tuning stage as an example. The difference between specialized pre-training and fine-tuning is the data used.
 

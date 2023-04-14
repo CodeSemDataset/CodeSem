@@ -1,3 +1,4 @@
+# coding=utf-8
 # Copyright 2018 The Google AI Language Team Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,21 +24,24 @@ import csv
 import modeling
 import optimization
 import tensorflow.compat.v1 as tf
+import numpy as np
+import random
+from collections import Counter
 
 from timeit import default_timer as timer
 from datetime import timedelta
 
+#tf.config.run_functions_eagerly(True)
 flags = tf.flags
 FLAGS = flags.FLAGS
 
-tf.enable_eager_execution()
-tf.disable_v2_behavior()
+buffer_size = 100
 
 ## Required parameters
+
 flags.DEFINE_string(
-    "data_dir", None,
-    "The input data dir. Should contain the .tsv files (or other data files) "
-    "for the task.")
+    "input_file", None,
+    "Input TF example files (can be a glob or comma separated).")
 
 flags.DEFINE_string(
     "bert_config_file", None,
@@ -62,32 +66,11 @@ flags.DEFINE_integer(
     "Sequences longer than this will be truncated, and sequences shorter "
     "than this will be padded.")
 
-flags.DEFINE_float("train_margin", 1.0,
-                   "The margin for comparing contrasitive loss.")
-
-flags.DEFINE_float("eval_margin", 1.0,
-                   "The margin for comparing contrasitive loss.")
-
-flags.DEFINE_float("eval_margin_min", 1.0,
-                   "The margin for comparing contrasitive loss.")
-
-flags.DEFINE_float("eval_margin_max", 1.0,
-                   "The margin for comparing contrasitive loss.")
-
-flags.DEFINE_float("pred_margin", 1.0,
-                   "The margin for comparing contrasitive loss.")
-
-flags.DEFINE_bool("train_for_margin", False, "Whether to train for 20 margins.")
-
-flags.DEFINE_bool("print_margin", True, "Whether to assign d_sqrt to probabilities.")
+flags.DEFINE_float("masked_lm_prob", 0.15, "Masked LM probability.")
 
 flags.DEFINE_bool("do_train", False, "Whether to run training.")
 
 flags.DEFINE_bool("do_eval", False, "Whether to run eval on the dev set.")
-
-flags.DEFINE_bool(
-    "do_predict", False,
-    "Whether to run the model in inference mode on the test set.")
 
 flags.DEFINE_integer("train_batch_size", 32, "Total batch size for training.")
 
@@ -113,25 +96,25 @@ flags.DEFINE_integer("iterations_per_loop", 1000,
 
 flags.DEFINE_bool("use_tpu", False, "Whether to use TPU or GPU/CPU.")
 
-flags.DEFINE_string(
+tf.flags.DEFINE_string(
     "tpu_name", None,
     "The Cloud TPU to use for training. This should be either the name "
     "used when creating the Cloud TPU, or a grpc://ip.address.of.tpu:8470 "
     "url.")
 
-flags.DEFINE_string(
+tf.flags.DEFINE_string(
     "tpu_zone", None,
     "[Optional] GCE zone where the Cloud TPU is located in. If not "
     "specified, we will attempt to automatically detect the GCE project from "
     "metadata.")
 
-flags.DEFINE_string(
+tf.flags.DEFINE_string(
     "gcp_project", None,
     "[Optional] Project name for the Cloud TPU-enabled project. If not "
     "specified, we will attempt to automatically detect the GCE project from "
     "metadata.")
 
-flags.DEFINE_string("master", None, "[Optional] TensorFlow master URL.")
+tf.flags.DEFINE_string("master", None, "[Optional] TensorFlow master URL.")
 
 flags.DEFINE_integer(
     "num_tpu_cores", 8,
@@ -140,22 +123,11 @@ flags.DEFINE_integer(
 class InputExample(object):
   """A single training/test example for simple sequence classification."""
 
-  def __init__(self, guid, text_a, text_b=None, label=None):
-    """Constructs a InputExample.
-
-    Args:
-      guid: Unique id for the example.
-      text_a: string. The untokenized text of the first sequence. For single
-        sequence tasks, only this sequence must be specified.
-      text_b: (Optional) string. The untokenized text of the second sequence.
-        Only must be specified for sequence pair tasks.
-      label: (Optional) string. The label of the example. This should be
-        specified for train and dev examples, but not for test examples.
-    """
+  def __init__(self, guid, text, label=None):
     self.guid = guid
-    self.text_a = text_a
-    self.text_b = text_b
+    self.text = text
     self.label = label
+
 
 class PaddingInputExample(object):
   """Fake example so the num input examples is a multiple of the batch size.
@@ -168,6 +140,8 @@ class PaddingInputExample(object):
   We use this class instead of `None` because treating `None` as padding
   battches could cause silent errors.
   """
+
+
 
 class InputFeatures(object):
   """A single set of features of data."""
@@ -184,7 +158,7 @@ class InputFeatures(object):
     self.segment_ids = segment_ids
     self.label_id = label_id
     self.is_real_example = is_real_example
-    self.guid = guid
+    self.guid =guid
 
 
 class DataProcessor(object):
@@ -198,62 +172,53 @@ class DataProcessor(object):
     """Gets a collection of `InputExample`s for the dev set."""
     raise NotImplementedError()
 
-  def get_test_examples(self, data_dir):
-    """Gets a collection of `InputExample`s for prediction."""
-    raise NotImplementedError()
-
-  def get_labels(self):
-    """Gets the list of labels for this data set."""
-    raise NotImplementedError()
-
   @classmethod
   def _read_tsv(cls, input_file, quotechar=None):
     """Reads a tab separated value file."""
-    with tf.gfile.Open(input_file, "r") as f:
-      reader = csv.reader(f, delimiter="\t", quotechar=quotechar)
-      lines = []
-      for line in reader:
-        lines.append(line)
-      return lines
+    lines = []
+    with open(input_file, "r") as f:
+        line = f.readline()
+        while line:
+            line = line.strip().split('\t')
+            lines.append(line)
+            line = f.readline()
+    del lines[0]
+    print('totally read ' + str(len(lines)) + ' data.')
+    return lines
+
+    # with tf.gfile.Open(input_file, "r") as f:
+    #     reader = csv.reader(f, delimiter="\t", quotechar=quotechar)
+    #     for line in reader:
+    #         lines.append(line)
+    #     del lines[0]
+    #     return lines
 
 
-class CubertProcessor(DataProcessor):
+class CodebertProcessor(DataProcessor):
   """Processor for the MRPC data set (GLUE version)."""
   def get_train_examples(self, data_dir):
     """See base class."""
     return self._create_examples(
-        self._read_tsv(os.path.join(data_dir, "train.tsv")), "train")
+        self._read_tsv(data_dir), "train")
 
   def get_dev_examples(self, data_dir):
     """See base class."""
     return self._create_examples(
-        self._read_tsv(os.path.join(data_dir, "dev.tsv")), "dev")
-
-  def get_test_examples(self, data_dir):
-    """See base class."""
-    return self._create_examples(
-        self._read_tsv(os.path.join(data_dir, "test.tsv")), "test")
-
-  def get_labels(self):
-    """See base class."""
-    return ["0", "1"]
+        self._read_tsv(data_dir), "dev")
 
   def _create_examples(self, lines, set_type):
     """Creates examples for the training and dev sets."""
     examples = []
     for (i, line) in enumerate(lines):
-      if i == 0:
-        continue
+      text = line[0]
+      label = line[1]
       guid = "%s-%s" % (set_type, i)
-      text_a = line[0]
-      text_b = line[1]
-      label = line[2]
       examples.append(
-          InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
+          InputExample(guid=guid, text=text, label=label))
     return examples
 
 
-def convert_single_example(ex_index, example, label_list, max_seq_length):
+def convert_single_example(ex_index, example, max_seq_length):
   """Converts a single `InputExample` into a single `InputFeatures`."""
 
   if isinstance(example, PaddingInputExample):
@@ -261,87 +226,43 @@ def convert_single_example(ex_index, example, label_list, max_seq_length):
         input_ids=[0] * max_seq_length,
         input_mask=[0] * max_seq_length,
         segment_ids=[0] * max_seq_length,
-        label_id=0,
+        label_id=[0] * max_seq_length,
         is_real_example=False,
         guid="padding")
 
-  label_map = {}
-  for (i, label) in enumerate(label_list):
-    label_map[label] = i
-
-  input_a = list(map(int, example.text_a.split()))
-  input_b = list(map(int, example.text_b.split()))
-
-  max_length = int((max_seq_length - 3)/2)
-
-  if len(input_a) > max_length:
-    input_a = input_a[0:max_length]
+  # use CLS and SEP, and set 1 for corresponding label position
+  input_ids = [2] + list(map(int, example.text.split()))
+  label_id = [1] + list(map(int, example.label.split()))
+  if len(input_ids) > max_seq_length - 1:
+      input_ids = input_ids[0:(max_seq_length - 1)]
+      label_id = label_id[0:(max_seq_length - 1)]
   else:
-    input_a += [0] * (max_length - len(input_a))
+      input_ids += [0] * (max_seq_length - 1 - len(input_ids))
+      label_id += [0] * (max_seq_length - 1 - len(label_id))
+  input_ids.append(3)
+  label_id.append(1)
 
-  assert len(input_b) != 0
-  if len(input_b) > max_length:
-    input_b = input_b[0:max_length]
-  else:
-    input_b += [0] * (max_length - len(input_b))
-
-  # The convention in BERT is:
-  # (a) For sequence pairs:
-  #  tokens:   [CLS] is this jack ##son ##ville ? [SEP] no it is not . [SEP]
-  #  type_ids: 0     0  0    0    0     0       0 0     1  1  1  1   1 1
-
-  input_ids = []
   segment_ids = []
   input_mask = []
+  for input_id in input_ids:
+      segment_ids.append(0)
+      if (input_id == 0):
+          input_mask.append(0)
+      else:
+          input_mask.append(1)
 
-  # Add [CLS]
-  input_ids.append(2)
-  segment_ids.append(0)
-  input_mask.append(1)
+  assert len(input_ids) == max_seq_length
+  assert len(input_mask) == max_seq_length
+  assert len(segment_ids) == max_seq_length
+  assert len(label_id) == max_seq_length
 
-  for input_id in input_a:
-    input_ids.append(input_id)
-    segment_ids.append(0)
-    if (input_id == 0):
-      input_mask.append(0)
-    else:
-      input_mask.append(1)
-
-  # Add [SEP]
-  input_ids.append(3)
-  segment_ids.append(0)
-  input_mask.append(1)
-
-  for input_id in input_b:
-    input_ids.append(input_id)
-    segment_ids.append(1)
-    if (input_id == 0):
-      input_mask.append(0)
-    else:
-      input_mask.append(1)
-
-  # Add [SEP]
-  input_ids.append(3)
-  segment_ids.append(1)
-  input_mask.append(1)
-
-  assert len(input_ids) + 1 == max_seq_length
-  assert len(input_mask) + 1 == max_seq_length
-  assert len(segment_ids) + 1 == max_seq_length
-
-  # Zero-pad up to the sequence length.
-  input_ids.append(0)
-  input_mask.append(0)
-  segment_ids.append(1)
-
-  label_id = label_map[example.label]
   if ex_index < 5:
     tf.logging.info("*** Example ***")
     tf.logging.info("guid: %s" % (example.guid))
     tf.logging.info("input_ids: %s" % " ".join([str(x) for x in input_ids]))
     tf.logging.info("input_mask: %s" % " ".join([str(x) for x in input_mask]))
     tf.logging.info("segment_ids: %s" % " ".join([str(x) for x in segment_ids]))
-    tf.logging.info("label: %s (id = %d)" % (example.label, label_id))
+    tf.logging.info("label: %s" % " ".join([str(x) for x in label_id]))
 
   feature = InputFeatures(
       input_ids=input_ids,
@@ -352,8 +273,9 @@ def convert_single_example(ex_index, example, label_list, max_seq_length):
       guid=example.guid)
   return feature
 
+
 def file_based_convert_examples_to_features(
-    examples, label_list, max_seq_length, output_file):
+    examples, max_seq_length, output_file):
   """Convert a set of `InputExample`s to a TFRecord file."""
 
   writer = tf.python_io.TFRecordWriter(output_file)
@@ -362,8 +284,7 @@ def file_based_convert_examples_to_features(
     if ex_index % 10000 == 0:
       tf.logging.info("Writing example %d of %d" % (ex_index, len(examples)))
 
-    feature = convert_single_example(ex_index, example, label_list,
-                                     max_seq_length)
+    feature = convert_single_example(ex_index, example, max_seq_length)
 
     def create_int_feature(values):
       f = tf.train.Feature(int64_list=tf.train.Int64List(value=list(values)))
@@ -373,25 +294,27 @@ def file_based_convert_examples_to_features(
     features["input_ids"] = create_int_feature(feature.input_ids)
     features["input_mask"] = create_int_feature(feature.input_mask)
     features["segment_ids"] = create_int_feature(feature.segment_ids)
-    features["label_ids"] = create_int_feature([feature.label_id])
+    features["label_ids"] = create_int_feature(feature.label_id)
     features["is_real_example"] = create_int_feature(
         [int(feature.is_real_example)])
-    features["guid"] = tf.train.Feature(bytes_list=tf.train.BytesList(value=[feature.guid.encode()]))
+    features["guid"] = tf.train.Feature(
+        bytes_list=tf.train.BytesList(value=[feature.guid.encode()]))
 
     tf_example = tf.train.Example(features=tf.train.Features(feature=features))
     writer.write(tf_example.SerializeToString())
   writer.close()
 
 
+
 def file_based_input_fn_builder(input_file, seq_length, is_training,
-                                drop_remainder):
+                                drop_remainder, hidden_size):
   """Creates an `input_fn` closure to be passed to TPUEstimator."""
 
   name_to_features = {
       "input_ids": tf.FixedLenFeature([seq_length], tf.int64),
       "input_mask": tf.FixedLenFeature([seq_length], tf.int64),
       "segment_ids": tf.FixedLenFeature([seq_length], tf.int64),
-      "label_ids": tf.FixedLenFeature([], tf.int64),
+      "label_ids": tf.FixedLenFeature([seq_length], tf.int64),
       "is_real_example": tf.FixedLenFeature([], tf.int64),
   }
 
@@ -416,9 +339,6 @@ def file_based_input_fn_builder(input_file, seq_length, is_training,
     # For training, we want a lot of parallel reading and shuffling.
     # For eval, we want no shuffling and parallel reading doesn't matter.
     d = tf.data.TFRecordDataset(input_file)
-    if is_training:
-      d = d.repeat()
-      d = d.shuffle(buffer_size=100)
 
     d = d.apply(
         tf.data.experimental.map_and_batch(
@@ -430,8 +350,10 @@ def file_based_input_fn_builder(input_file, seq_length, is_training,
 
   return input_fn
 
+
 def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
-                 labels, num_labels, use_one_hot_embeddings, mode):
+                 labels, use_one_hot_embeddings, mode):
+                 # labels, num_labels, use_one_hot_embeddings, batch_id):
   """Creates a classification model."""
   model = modeling.BertModel(
     config=bert_config,
@@ -441,30 +363,33 @@ def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
     token_type_ids=segment_ids,
     use_one_hot_embeddings=use_one_hot_embeddings)
 
-  #  float Tensor of shape [batch_size, seq_length, hidden_size]
-  sequence_output = model.get_sequence_output()
+  # matrix: float Tensor of shape [batch_size, seq_length, hidden_size]
+  matrix = model.get_sequence_output()
+  batch_size = matrix.get_shape().as_list()[0]
+  # batch_size = matrix.shape[0]
+  hidden_size = matrix.shape[-1]
+  if batch_size == None:
+    batch_size = FLAGS.predict_batch_size
 
-  final_hidden_shape = modeling.get_shape_list(sequence_output, expected_rank=3)
-  output_layer = model.get_pooled_output()
-  hidden_size = final_hidden_shape[2]
-  output_weights = tf.get_variable(
-          "output_weights", [2, hidden_size],
-          initializer=tf.truncated_normal_initializer(stddev=0.02))
+  output_weights = tf.get_variable("output_weights", [hidden_size, 2],
+                                     initializer=tf.truncated_normal_initializer(stddev=0.02))
   output_bias = tf.get_variable("output_bias", [2], initializer=tf.zeros_initializer())
-
-  #  Use contrastive loss
+  # Use contrastive loss
   with tf.variable_scope("loss"):
-    logits = tf.matmul(output_layer, output_weights, transpose_b=True)
+    max_seq_length = FLAGS.max_seq_length
+    logits = tf.matmul(matrix, output_weights)
     logits = tf.nn.bias_add(logits, output_bias)
     probabilities = tf.nn.softmax(logits, axis=-1)
     log_probs = tf.nn.log_softmax(logits, axis=-1)
-    one_hot_labels = tf.one_hot(labels, depth=num_labels, dtype=tf.float32)
-    per_example_loss = -tf.reduce_sum(one_hot_labels * log_probs, axis=-1)
-    loss = tf.reduce_mean(per_example_loss)
+    orig_pred_prob = tf.gather(log_probs, [1], axis=-1)
+    labels = tf.cast(labels, tf.float32)
+    labels = tf.expand_dims(labels, axis=-1)
+    per_example_loss = orig_pred_prob * labels + (1 - labels) * (1 - orig_pred_prob)
+    loss = -tf.reduce_sum(per_example_loss)
     return (loss, per_example_loss, logits, probabilities)
 
 
-def model_fn_builder(bert_config, num_labels, init_checkpoint, learning_rate,
+def model_fn_builder(bert_config, init_checkpoint, learning_rate,
                      num_train_steps, num_warmup_steps, use_tpu,
                      use_one_hot_embeddings):
   """Returns `model_fn` closure for TPUEstimator."""
@@ -480,6 +405,7 @@ def model_fn_builder(bert_config, num_labels, init_checkpoint, learning_rate,
     input_mask = features["input_mask"]
     segment_ids = features["segment_ids"]
     label_ids = features["label_ids"]
+
     is_real_example = None
     if "is_real_example" in features:
       is_real_example = tf.cast(features["is_real_example"], dtype=tf.float32)
@@ -488,9 +414,11 @@ def model_fn_builder(bert_config, num_labels, init_checkpoint, learning_rate,
 
     is_training = (mode == tf.estimator.ModeKeys.TRAIN)
 
+
     (total_loss, per_example_loss, logits, probabilities) = create_model(
         bert_config, is_training, input_ids, input_mask, segment_ids, label_ids,
-        num_labels, use_one_hot_embeddings, mode)
+        use_one_hot_embeddings, mode)
+
 
     tvars = tf.trainable_variables()
     initialized_variable_names = {}
@@ -509,7 +437,6 @@ def model_fn_builder(bert_config, num_labels, init_checkpoint, learning_rate,
         tf.train.init_from_checkpoint(init_checkpoint, assignment_map)
 
     tf.logging.info("**** Trainable Variables ****")
-
     for var in tvars:
       init_string = ""
       if var.name in initialized_variable_names:
@@ -519,6 +446,7 @@ def model_fn_builder(bert_config, num_labels, init_checkpoint, learning_rate,
 
     output_spec = None
     if mode == tf.estimator.ModeKeys.TRAIN:
+
       train_op = optimization.create_optimizer(
           total_loss, learning_rate, num_train_steps, num_warmup_steps, use_tpu)
 
@@ -533,20 +461,15 @@ def model_fn_builder(bert_config, num_labels, init_checkpoint, learning_rate,
         predictions = tf.argmax(logits, axis=-1, output_type=tf.int32)
         accuracy = tf.metrics.accuracy(
             labels=label_ids, predictions=predictions, weights=is_real_example)
-        precision = tf.metrics.precision(
-            labels=label_ids, predictions=predictions, weights=is_real_example)
-        recall = tf.metrics.recall(
-            labels=label_ids, predictions=predictions, weights=is_real_example)
         loss = tf.metrics.mean(values=per_example_loss, weights=is_real_example)
-        # margin = tf.metrics.mean(values=d_sqrt, weights=is_real_example)
         return {
             "eval_accuracy": accuracy,
             "eval_loss": loss,
-            "eval_precision": precision,
-            "eval_recall": recall,
-            # "margin": margin,
         }
 
+      is_real_example = tf.expand_dims(is_real_example, -1)
+      is_real_example = tf.tile(is_real_example, [1, bert_config.hidden_size])
+      is_real_example = tf.expand_dims(is_real_example, -1)
       eval_metrics = (metric_fn,
                       [per_example_loss, label_ids, logits, is_real_example])
       output_spec = tf.estimator.tpu.TPUEstimatorSpec(
@@ -555,10 +478,7 @@ def model_fn_builder(bert_config, num_labels, init_checkpoint, learning_rate,
           eval_metrics=eval_metrics,
           scaffold_fn=scaffold_fn)
     else:
-      output_spec = tf.estimator.tpu.TPUEstimatorSpec(
-          mode=mode,
-          predictions={"probabilities": probabilities},
-          scaffold_fn=scaffold_fn)
+      raise ValueError("Only TRAIN and EVAL modes are supported: %s" % (mode))
     return output_spec
 
   return model_fn
@@ -568,12 +488,12 @@ def main(_):
   tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.INFO)
 
   processors = {
-      "cubert": CubertProcessor,
+      "codebert": CodebertProcessor,
   }
 
-  if not FLAGS.do_train and not FLAGS.do_eval and not FLAGS.do_predict:
+  if not FLAGS.do_train and not FLAGS.do_eval:
     raise ValueError(
-        "At least one of `do_train`, `do_eval` or `do_predict' must be True.")
+        "At least one of `do_train` or `do_eval` must be True.")
 
   bert_config = modeling.BertConfig.from_json_file(FLAGS.bert_config_file)
 
@@ -591,8 +511,6 @@ def main(_):
     raise ValueError("Task not found: %s" % (task_name))
 
   processor = processors[task_name]()
-
-  label_list = processor.get_labels()
 
   tpu_cluster_resolver = None
   if FLAGS.use_tpu and FLAGS.tpu_name:
@@ -614,14 +532,14 @@ def main(_):
   num_train_steps = None
   num_warmup_steps = None
   if FLAGS.do_train:
-    train_examples = processor.get_train_examples(FLAGS.data_dir)
+    train_examples = processor.get_train_examples(FLAGS.input_file)
+    print(len(train_examples))
     num_train_steps = int(
         len(train_examples) / FLAGS.train_batch_size * FLAGS.num_train_epochs)
     num_warmup_steps = int(num_train_steps * FLAGS.warmup_proportion)
 
   model_fn = model_fn_builder(
       bert_config=bert_config,
-      num_labels=len(label_list),
       init_checkpoint=FLAGS.init_checkpoint,
       learning_rate=FLAGS.learning_rate,
       num_train_steps=num_train_steps,
@@ -643,7 +561,7 @@ def main(_):
   if FLAGS.do_train:
     train_file = os.path.join(FLAGS.output_dir, "train.tf_record")
     file_based_convert_examples_to_features(
-        train_examples, label_list, FLAGS.max_seq_length, train_file)
+        train_examples, FLAGS.max_seq_length, train_file)
     tf.logging.info("***** Running training *****")
     tf.logging.info("  Num examples = %d", len(train_examples))
     tf.logging.info("  Batch size = %d", FLAGS.train_batch_size)
@@ -652,25 +570,25 @@ def main(_):
         input_file=train_file,
         seq_length=FLAGS.max_seq_length,
         is_training=True,
-        drop_remainder=True)
+        drop_remainder=True,
+        hidden_size = bert_config.hidden_size)
     estimator.train(input_fn=train_input_fn, max_steps=num_train_steps)
 
-
   if FLAGS.do_eval:
-    eval_examples = processor.get_dev_examples(FLAGS.data_dir)
+    eval_examples = processor.get_dev_examples(FLAGS.input_file)
     num_actual_eval_examples = len(eval_examples)
-    if FLAGS.use_tpu:
+    # if FLAGS.use_tpu:
       # TPU requires a fixed batch size for all batches, therefore the number
       # of examples must be a multiple of the batch size, or else examples
       # will get dropped. So we pad with fake examples which are ignored
       # later on. These do NOT count towards the metric (all tf.metrics
       # support a per-instance weight, and these get a weight of 0.0).
-      while len(eval_examples) % FLAGS.eval_batch_size != 0:
-        eval_examples.append(PaddingInputExample())
+    while len(eval_examples) % FLAGS.eval_batch_size != 0:
+      eval_examples.append(PaddingInputExample())
 
     eval_file = os.path.join(FLAGS.output_dir, "eval.tf_record")
     file_based_convert_examples_to_features(
-        eval_examples, label_list, FLAGS.max_seq_length, eval_file)
+        eval_examples, FLAGS.max_seq_length, eval_file)
 
     tf.logging.info("***** Running evaluation *****")
     tf.logging.info("  Num examples = %d (%d actual, %d padding)",
@@ -691,98 +609,21 @@ def main(_):
         input_file=eval_file,
         seq_length=FLAGS.max_seq_length,
         is_training=False,
-        drop_remainder=eval_drop_remainder)
-    print("eval_margin_max = ",FLAGS.eval_margin_max)
-    print("eval_margin_min = ",FLAGS.eval_margin_min)
+        drop_remainder=eval_drop_remainder,
+        hidden_size = bert_config.hidden_size)
+
     output_eval_file = os.path.join(FLAGS.output_dir, "eval_results.txt")
-    if not(FLAGS.train_for_margin):
-        result = estimator.evaluate(input_fn=eval_input_fn, steps=eval_steps)
-        with tf.gfile.GFile(output_eval_file, "w") as writer:
-          tf.logging.info("***** Eval results *****")
-          for key in sorted(result.keys()):
+    result = estimator.evaluate(input_fn=eval_input_fn, steps=eval_steps)
+    with tf.gfile.GFile(output_eval_file, "w") as writer:
+        tf.logging.info("***** Eval results *****")
+        for key in sorted(result.keys()):
             tf.logging.info("  %s = %s", key, str(result[key]))
             writer.write("%s = %s\n" % (key, str(result[key])))
-    else:
-        margin_list = []
-        for i in range(20):
-            FLAGS.eval_margin = FLAGS.eval_margin_min + (FLAGS.eval_margin_max - FLAGS.eval_margin_min) / 19 * i
-            print("eval_margin = ",FLAGS.eval_margin)
-            result = estimator.evaluate(input_fn=eval_input_fn, steps=eval_steps)
-
-            print("in iteration i = {}, eval_margin = {}".format(i, FLAGS.eval_margin))
-            with tf.gfile.GFile(output_eval_file, "a") as writer:
-              tf.logging.info("***** Eval results *****")
-              writer.write("In iteration %s, eval_margin = %s\n" % (str(i),str(FLAGS.eval_margin)))
-              for key in sorted(result.keys()):
-                tf.logging.info("  %s = %s", key, str(result[key]))
-                writer.write("%s = %s\n" % (key, str(result[key])))
-                if(key == 'eval_accuracy'):
-                    margin_list.append(result[key])
-        print("margin_list = ", margin_list)
-        print("the margin to get the max eval_accuracy is {}, the max eval_accuracy score is {}".format(FLAGS.eval_margin_min + (FLAGS.eval_margin_max-FLAGS.eval_margin_min) / 19 * margin_list.index(max(margin_list)), max(margin_list)))
-  if FLAGS.do_predict:
-    predict_examples = processor.get_test_examples(FLAGS.data_dir)
-    num_actual_predict_examples = len(predict_examples)
-    if FLAGS.use_tpu:
-      # TPU requires a fixed batch size for all batches, therefore the number
-      # of examples must be a multiple of the batch size, or else examples
-      # will get dropped. So we pad with fake examples which are ignored
-      # later on.
-      while len(predict_examples) % FLAGS.predict_batch_size != 0:
-        predict_examples.append(PaddingInputExample())
-
-    predict_file = os.path.join(FLAGS.output_dir, "predict.tf_record")
-    file_based_convert_examples_to_features(predict_examples, label_list,
-                                            FLAGS.max_seq_length,
-                                            predict_file)
-
-    tf.logging.info("***** Running prediction*****")
-    tf.logging.info("  Num examples = %d (%d actual, %d padding)",
-                    len(predict_examples), num_actual_predict_examples,
-                    len(predict_examples) - num_actual_predict_examples)
-    tf.logging.info("  Batch size = %d", FLAGS.predict_batch_size)
-
-    predict_drop_remainder = True if FLAGS.use_tpu else False
-    predict_input_fn = file_based_input_fn_builder(
-        input_file=predict_file,
-        seq_length=FLAGS.max_seq_length,
-        is_training=False,
-        drop_remainder=predict_drop_remainder)
-
-    result = estimator.predict(input_fn=predict_input_fn)
-
-    output_predict_file = os.path.join(FLAGS.output_dir, "test_results.tsv")
-    if FLAGS.print_margin:
-        with tf.gfile.GFile(output_predict_file, "w") as writer:
-          num_written_lines = 0
-          tf.logging.info("***** Predict results *****")
-          for (i, prediction) in enumerate(result):
-            probabilities = prediction["probabilities"]
-            if i >= num_actual_predict_examples:
-              break
-            output_line = str(probabilities) + "\n"
-            writer.write(output_line)
-            num_written_lines += 1
-        assert num_written_lines == num_actual_predict_examples
-    else:
-        with tf.gfile.GFile(output_predict_file, "w") as writer:
-          num_written_lines = 0
-          tf.logging.info("***** Predict results *****")
-          for (i, prediction) in enumerate(result):
-            probabilities = prediction["probabilities"]
-            if i >= num_actual_predict_examples:
-              break
-            output_line = "\t".join(
-                str(class_probability)
-                for class_probability in probabilities) + "\n"
-            writer.write(output_line)
-            num_written_lines += 1
-        assert num_written_lines == num_actual_predict_examples
   end = timer()
-  print("time used:", str(timedelta(seconds=end-start)))
+  print("time used:",str(timedelta(seconds=end-start)))
 
 if __name__ == "__main__":
-  flags.mark_flag_as_required("data_dir")
+  flags.mark_flag_as_required("input_file")
   flags.mark_flag_as_required("output_dir")
   flags.mark_flag_as_required("task_name")
   flags.mark_flag_as_required("bert_config_file")

@@ -32,7 +32,7 @@ class SandwichDef(BaseSandwichDef):
         params = dict(super().default_params())
         params.update({
             # TODO: play with the following parameters
-            'batch_size': 60000,
+            'batch_size': 100000,
             'use_edge_bias': True,
             'use_propagation_attention': True,
             'use_edge_msg_avg_aggregation': True,
@@ -475,6 +475,8 @@ def main():
         parser.add_argument("--max_d", "-max", help="the max d_sqrt")
         parser.add_argument("--min_d", "-min", help="the min d_sqrt")
         parser.add_argument("--margin", "-m", help="the margin for compute loss")
+        parser.add_argument("--pre_train", action="store_true", help="local level pretrain phase")
+        parser.add_argument("--pre_trained_model", help="restore pretrained model when finetuning")
         args = parser.parse_args()
         start_time = timer()
 
@@ -494,11 +496,15 @@ def main():
                 print(margin_list[i],accuracy_list[i])
         else:
             if args.restore is not None:
-                model = SandwichDef(args, float(args.margin))
+                model = SandwichDef(args, 1)
                 model.test()
             else:
-                model = SandwichDef(args, 1) # margin = 1 for first train
-                accuracy = model.train()
+                if args.margin is not None:
+                    model = SandwichDef(args, float(args.margin))
+                    accuracy = model.train()
+                else:
+                    model = SandwichDef(args, 1)
+                    accuracy = model.train()
         end_time = timer()
         print("time used:",str(timedelta(seconds=end_time-start_time)))
 
