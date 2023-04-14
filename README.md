@@ -15,8 +15,8 @@ CodeSem is a dataset of programs extracted from real-world flagship software cod
 
 
 ## Quickstart
-There is the scripts to reproduce our experiments in the paper.
-```
+Here's a quick start to reproduce our experiment.
+```shell
 # clone this repository
 git clone https://github.com/CodeSemDataset/CodeSem.git
 cd CodeSem
@@ -27,12 +27,10 @@ docker build --network=host -t "tf:2.6" .
 # run a new docker container
 # Dir is the workdir of your local device
 docker run --gpus all -it --rm -v $Dir/CodeSem:/tmp tf:2.6 bash
-
-# refer to README in Scripts/tokens and Scripts/graph to generate model input
-
-# refer to README in Models/ to run models
 ```
+To generate model inputs for sequence models and graph models, refer to README in [scripts/tokens](https://github.com/CodeSemDataset/CodeSem/tree/main/scripts/tokens) and [scripts/graph](https://github.com/CodeSemDataset/CodeSem/tree/main/scripts/graph), respectively.
 
+To train and test models, refer to README in each code model under [models/](https://github.com/CodeSemDataset/CodeSem/tree/main/models).
 ## Introduction
 CodeSem is a dataset built upon the source code of real-world flagship software (e.g., Linux Kernel, GCC, MySQL, etc.) and has been manually validated for two prediction tasks: (1) alias prediction in which models predict whether two pointers must alias, may alias or must not alias; and (2) equivalence prediction in which models predict whether two programs are semantically equivalent. We re-designed four influential code models for alias and equivalence prediction: CuBERT, CodeBERT, GGNN, and Graph Sandwiches, and perform a head-to-head comparison based on CodeSem.
 
