@@ -4,7 +4,7 @@
 """
 import os
 import re
-import shutil
+import argparse
 
 from clang.cindex import Config
 
@@ -17,48 +17,73 @@ import sys
 import csv
 import multiprocessing
 
-sys.path.append('..')
+sys.path.extend(['.','..'])
 from queue import PriorityQueue
 from pack.util import readVocabFile, dbgout 
 from pack.ast_related import *
 from pack.file_sys import *
 
+# parser = argparse.ArgumentParser(description='Auto run arguments')
+# parser.add_argument('-p','--pattern', dest='pattern', type=str, choices=[perfFunc, perfStr, funcStr],
+#     help='Test pattern, eg. perform or function')
+# # parser.add_argument("-perform",action="store_true",help="Pattern is performance or not.")
+# # parser.add_argument("-function",action="store_true",help="Pattern is function or not.")
+# parser.add_argument('-op','--option', dest='option', type=str, default='both', 
+#     choices=['both', 'full-old', 'full-new', 'inc', 'compare'], help='Wpa run option')
+# parser.add_argument('-td','--test-dir', dest='test_dir', type=str, default='test', help='Test directory')
+# parser.add_argument('-wl','--worklist', dest='worklist_name', type=str, default='worklist.txt', help='Path of worklist file')
+# parser.add_argument('-dump-mssa','--dump-mssa',dest='dump_mssa',default='',action='store_const',const='--dump-mssa',help='Dump MSSA or not.')
+# parser.add_argument('-dump-svfg','--dump-svfg',dest='dump_svfg',default='',action='store_const',const='--dump-vfg',help='Dump SVFG or not.')
+# parser.add_argument('-leak','--leak',dest='leak',default='',action='store_const',const='-leak',help='Dump leak check or not.')
+# parser.add_argument('-uvalue','--uvalue',dest='uvalue',default='',action='store_const',const='-uvalue',help='Dump unused value check or not.')
+# parser.add_argument('-mem-par','--mem-par', dest='mem_par', type=str, default='intra-disjoint', choices=['distinct', 'intra-disjoint', 'inter-disjoint'], help='Mem partition type')
+# parser.add_argument('-ptr-only','--ptr-only', dest='ptr_only',default='',action='store_const',const='-ptr-only-svfg',help="build ptr only svfg or not.")
+# parser.add_argument('-opt-svfg','--opt-svfg', dest='opt_svfg',default='',action='store_const',const='-wpa-opt-svfg',help="build opt svfg or not.")
+# parser.add_argument('-fs','--flow-sensitive',dest='flow_sensitive',action='store_true',help='Flow sensitive pta.')
+# parser.add_argument('-cmp-pts',dest='cmp_pts',action='store_true',help='Compare pts or not.')
+# parser.add_argument('-cmp-mssa',dest='cmp_mssa',action='store_true',help='Compare mssa or not.')
+# parser.add_argument('-cmp-leak',dest='cmp_leak',action='store_true',help='Compare leak check output or not.')
+# parser.add_argument('-cmp-uvalue',dest='cmp_uvalue',action='store_true',help='Compare unused value check output or not.')
+# parser.add_argument('-to-md',dest='to_md',action='store_true',help='Collect SVFG pictures into markdown.')
+# parser.add_argument('-chty', dest='change_type', type=str, default='insert', choices=['insert', 'delete'], help='Code change type, eg. insert or delete')
+# parser.add_argument('-opt-svfg','--opt-svfg', dest='opt_svfg',default='',action='store_const',const='-wpa-opt-svfg',help="Build opt svfg or not.")
+# parser.add_argument('--arg-list',dest='arg_list', type=str, nargs='*',default=[], help='WPA arguments list')
+
+parser = argparse.ArgumentParser(description='Auto run arguments')
+parser.add_argument('-voc','--vocab', dest='vocab', type=str, default='', help='Vocab directory')
+parser.add_argument('-i','--input', dest='input', type=str, default='input', help='Input directory')
+parser.add_argument('-o','--output', dest='output', type=str, default='output', help='Output directory')
+parser.add_argument('-abs','--use-abs-path',dest='use_abs_path',action='store_true',help='Use absolute path.')
+args = parser.parse_args()
+
 # TODO
+debug=None
+errors=None
+which=None
 # mutable arguments
-outDir = r'out/'
-csvFileDir = sys.argv[1]
-vocabPath = r'out/vocab.txt'
-# srcPrefix = r'/home/shared/projects/'
-MaxNum=-1
-CountNum=0
-vl = len(sys.argv)
-if vl > 2:
-    vocabPath = sys.argv[2]
+# outDir = r'out/'
+# csvFileDir = sys.argv[1]
+# vocabPath = r'out/vocab.txt'
+# # srcPrefix = r'/home/shared/projects/'
+# MaxNum=-1
+# CountNum=0
+# vl = len(sys.argv)
+# if vl > 2:
+#     vocabPath = sys.argv[2]
 
-if vl > 3:
-    outDir = sys.argv[3]
-    if not outDir.endswith('/'):
-        outDir += '/'
+# if vl > 3:
+#     outDir = sys.argv[3]
+#     if not outDir.endswith('/'):
+#         outDir += '/'
 
-isAbsPath=False
-if vl>4:
-    isAbsPath=(sys.argv[4]=='full')
+# isAbsPath=False
+# if vl>4:
+#     isAbsPath=(sys.argv[4]=='full')
 
-
-# prefixes=['/home/qian/Downloads/empirical_study/','/bigdata/qian/alias-analysis/']
-# prefixes1=[prefixes[1]+'wy-c-projects/',prefixes[1]+'wy-cpp-projects/']
-
-# whichToDir = {
-#     'gcc': prefixes[0]+'gcc-10.3.0/', 'mysql': prefixes[0]+'mysql-8.0.25/', 'linux': prefixes[0]+'wy-linux/linux-5.3.6/',
-#     'curl': prefixes[1]+'curl-new/src/', 'git': prefixes[1]+'git/', 'redis':prefixes[1]+'redis/deps/hiredis/', 'tmux':prefixes[1]+'tmux/',
-#     'h2o': prefixes1[0]+'h2o/', 'libgit2':prefixes1[0]+'libgit2/', 'the-silver-searcher':prefixes1[0]+'the_silver_searcher/', 
-#     'protobuf':prefixes1[1]+'protobuf/'}
-
-# whichToAstRoot={
-#     'gcc': prefixes[0]+'gcc-10.3.0/build/', 'mysql': prefixes[0]+'mysql-8.0.25/build-ast/', 'linux': prefixes[0]+'wy-linux/linux-5.3.6/',
-#     'curl': '/bigdata/qian/curl-curl-7_79_0/build-ast/', 'git': '/bigdata/qian/rebuild-git/git/', 'redis':'/bigdata/qian/redis/', 'tmux':'/bigdata/qian/tmux/build-ast/',
-#     'h2o': prefixes1[0]+'h2o/build-ast/', 'libgit2':prefixes1[0]+'libgit2/build-ast/', 'the-silver-searcher':prefixes1[0]+'the_silver_searcher/build-ast/', 
-#     'protobuf':prefixes1[1]+'protobuf/build-ast/'}
+csvFileDir=args.input
+vocabPath=args.vocab
+outDir=args.output+'/'
+isAbsPath=args.use_abs_path
 
 direct_extend_ast={'mysql'} 
 
@@ -74,17 +99,18 @@ mapFuncLocToMyTokens={}
 usedAstPaths=set()
 
 class DefUse:  
-    def __init__(self, name, path, def_line, function, func_scope, use_points, label):
+    def __init__(self, name, path, def_line, alias_type, func_scope, use_points, label):
         self.name = name
         self.path = path
         self.def_line = def_line
-        self.function = function
+        self.alias_type = alias_type
         self.func_scope = func_scope
         self.use_points = use_points
         self.label = label
         self.relative_path=''
         self.ast_path=''      
         self.which=''
+        self.dist='0'
 
 def addNameLocToId(my_tokens):
 # def mapNameLoc2Id(defuse,tu):
@@ -129,11 +155,11 @@ def getDefUseLs(defuse, map_name_loc2id):
     visited_ids=set()
     curLoc=defuse.path+str(defuse.func_scope)
     if name not in map_name_loc2id:        
-        Errors.write("name {} not found in {}\n".format(name,curLoc))
+        errors.write("name {} not found in {}\n".format(name,curLoc))
         return None
     loc2id=map_name_loc2id[name]
     if defuse.def_line not in loc2id:
-        Errors.write("def line {} not found in {}\n".format(defuse.def_line,curLoc))
+        errors.write("def line {} not found in {}\n".format(defuse.def_line,curLoc))
         return None
     
     for pnt in defuse.use_points:
@@ -201,7 +227,7 @@ def getDefUseList(defuse,loc2idName):
             use_pnt_ids.append(id) 
         except KeyError:
             # errors.write("key error for %s in %s at %s\n"%(defuse.name,defuse.path,str(defuse.func_scope)))                      
-            Errors.write("key error for %s in %s at %s\n"%(defuse.name,defuse.path,defuse.func_scope))                      
+            errors.write("key error for %s in %s at %s\n"%(defuse.name,defuse.path,defuse.func_scope))                      
 
     return [def_id, listToStr(use_pnt_ids)]
 
@@ -224,7 +250,7 @@ def addPathToTu(defuse):
                     continue
                 tu=readAst(tmp_ast_path)
                 if not tu:
-                    Errors.write("tu error for total_path:%s and ast path:%s at addPathToTu\n"%(total_path,tmp_ast_path))
+                    errors.write("tu error for total_path:%s and ast path:%s at addPathToTu\n"%(total_path,tmp_ast_path))
                     continue
                 mapPathToTu[tu.spelling]=tu 
                 usedAstPaths.add(tmp_ast_path) 
@@ -232,7 +258,7 @@ def addPathToTu(defuse):
                     # ast_path=tmp_ast_path
                     break;  
     else:
-        Errors.write("file key %s of total_path %s is not in mapFileToAstPaths at getDefUse\n"%(file_key,total_path))
+        errors.write("file key %s of total_path %s is not in mapFileToAstPaths at getDefUse\n"%(file_key,total_path))
         # if total_path not in mapPathToTu:
         #     tu=getTu(total_path)
         #     if tu:
@@ -244,7 +270,7 @@ def addPathToTu(defuse):
         if tu:
             mapPathToTu[total_path]=tu
         else:
-            Errors.write("tu error for total_path %s at getDefUse\n"%(total_path))
+            errors.write("tu error for total_path %s at getDefUse\n"%(total_path))
 
 def getDefUse(row):
     global label
@@ -270,13 +296,14 @@ def getDefUse(row):
             total_path=seekFile(whichToDir[which],cur_path.split('/')[-1])
     
         if not total_path:
-            Errors.write(whichToDir[which] + cur_path + ' not found!\n')
+            errors.write(whichToDir[which] + cur_path + ' not found!\n')
             return None        
     raw_scope = row[4].split('-')
     scope = (int(raw_scope[0]), int(raw_scope[1]))
     pnts = []
     has_val=False
-    for i in range(5, len(row)):
+    # dist=row[5] # get distance
+    for i in range(7, len(row)):
         if row[i]=='':
             continue
         match_obj = re.match(r"\(\d+;(\d+);(\d+)\)", row[i])
@@ -295,26 +322,27 @@ def getDefUse(row):
             mapVarToDeflines[var_loc].add(def_line)
         else:
             mapVarToDeflines[var_loc]={def_line}
-        return DefUse(name, total_path, def_line, row[3], scope, pnts, label)
+        defuse=DefUse(name, total_path, def_line, row[3], scope, pnts, label)
+        defuse.dist=row[5]
+        defuse.extra_msg=row[6]
+        return defuse
     else:
         return None
 
-if __name__ == "__main__":
-    vocab = readVocabFile(vocabPath)
-    if len(vocab) <= 6:
-        sys.exit(1)
-    if not os.path.exists(outDir):
-            os.makedirs(outDir)  
-
+def main(data,start,end,step):
+    global label,debug,errors,which
+    # global debug 
+    # global errors
+    # global which
     res_cnt = open(outDir+'res_cnt.txt', 'w')
-    for tp in getFiles(csvFileDir):
+    for tp in data[start:end:step]:
         # csv_file_name=tp[1]
         defuses = []
         if not tp[1].endswith('.csv'):
             continue
         csv_path = tp[0] + '/' + tp[1]
         dbgout('csv path: ' + csv_path)
-        which = tp[1].rsplit('_',1)[0]
+        which = tp[1].split('_',1)[0]
         # rid=tp[1].rfind('.')
         out_name=tp[1].rsplit('.',1)[0] 
         mapFileToAstPaths.clear()
@@ -322,14 +350,14 @@ if __name__ == "__main__":
         usedAstPaths.clear()      
         mapFuncLocToMyTokens.clear()
 
-        debug = open(outDir+out_name+'_dbg_tka.txt', 'w')
-        Errors = open(outDir+out_name+'_errors_tka.txt', 'w')
-        artifical_verify = open(outDir+out_name+'_artifical_verify.csv', 'w')
+        debug = open(outDir+out_name+'-dbg-tka.txt', 'w')
+        errors = open(outDir+out_name+'-errors-tka.txt', 'w')
+        artifical_verify = open(outDir+out_name+'-artifical-verify.csv', 'w')
         artifical_verify_writer=csv.writer(artifical_verify)
         artifical_verify_writer.writerow([
-            'name1','path1','def_line1','name2','path2','def_line2','fine_grained_label'
+            'name1','path1','def_line1','name2','path2','def_line2','label'
         ])
-        init_errors(Errors)
+        init_errors(errors)
 
         with open(whichToAstRoot[which]+'astList.txt','r') as ast_list:
             for ast_path in ast_list:
@@ -344,13 +372,10 @@ if __name__ == "__main__":
     
                
         CountNum=0
-        with open(outDir + out_name + '_index.tsv', 'w', newline='') as tsv_file:
+        with open(outDir + out_name + '-index.tsv', 'w', newline='') as tsv_file:
             tsv_w = csv.writer(tsv_file, delimiter='\t')
             tsv_w.writerow(['vocab_val_seq', 'def1_index', 'use1_index',
-                            'def2_index', 'use2_index', 'label'])
-
-            # for vp in valid_paths:
-            #     tsv_w.writerow([vp,'tsv'])
+                            'def2_index', 'use2_index', 'label', 'distance', 'extra_msg'])
 
             # tsv_row = []
             # for defuse in defuses:
@@ -385,7 +410,7 @@ if __name__ == "__main__":
                     func_loc1 = defuse1.path + ' ' + str(defuse1.func_scope)
                     func_loc2 = defuse2.path + ' ' + str(defuse2.func_scope)
                     if func_loc1!=func_loc2:
-                        Errors.write("func_loc1: %s != func_loc2: %s\n"%(func_loc1,func_loc2))
+                        errors.write("func_loc1: %s != func_loc2: %s\n"%(func_loc1,func_loc2))
                         continue #默认函数内分析
 
                     addPathToTu(defuse1)
@@ -399,7 +424,7 @@ if __name__ == "__main__":
                             my_tokens=mapFuncLocToMyTokens[func_loc1]
                     else:
                         tu=None                        
-                        Errors.write("defuse path %s is not in mapPathToTu at main\n"%(defuse1.path))
+                        errors.write("defuse path %s is not in mapPathToTu at main\n"%(defuse1.path))
                     
                     if not tu:
                         continue
@@ -423,12 +448,14 @@ if __name__ == "__main__":
                     defUseLs1=getDefUseList(defuse1,loc2idName)
                     defUseLs2=getDefUseList(defuse2,loc2idName)
                     if defUseLs1[0]<0 or defUseLs2[0]<0:
-                        Errors.write("error: def id is -1 for %s in %s or %s in %s\n"%(
+                        errors.write("error: def id is -1 for %s in %s or %s in %s\n"%(
                             defuse1.name,defuse1.path,defuse2.name,defuse2.path
                         ))
                         continue
                     tsv_row.extend(defUseLs1+defUseLs2)
-                    tsv_row.append(defuse1.label)
+                    # tsv_row.append(defuse1.label)
+                    # tsv_row.append(defuse1.dist)
+                    tsv_row.extend([defuse1.label,defuse1.dist,defuse1.extra_msg])
                     tsv_w.writerow(tsv_row)
 
                     artifical_verify_writer.writerow([
@@ -436,8 +463,9 @@ if __name__ == "__main__":
                         defuse2.name,defuse2.path, defuse2.def_line, ''
                     ])
                     CountNum+=1
-                    if MaxNum>0 and CountNum>=MaxNum:
-                        break
+                    # if MaxNum>0 and CountNum>=MaxNum:
+                    #     break
+                    
                     # print("tsv row: ",tsv_row)
                     # mystr2=defuse2.path+' '+str(defuse2.func_scope)
                     # debug.write("{} * {} ** tsv row: {} ****\n{}\n".format(defuse1.name, defuse2.name, mystr1 + ' ' + mystr2, tsv_row))
@@ -445,11 +473,20 @@ if __name__ == "__main__":
                     dbgout("write tsv row end")
         res_cnt.write("%s has %d pairs\n"%(out_name,CountNum))
         debug.close()
-        Errors.close()
+        errors.close()
         artifical_verify.close()  
+    res_cnt.close()
+
+if __name__ == "__main__":
+    vocab = readVocabFile(vocabPath)
+    if len(vocab) <= 6:
+        sys.exit(1)
+    if not os.path.exists(outDir):
+        os.makedirs(outDir)  
 
     files=[]
     cpu_cnt=multiprocessing.cpu_count()
+    pid_list=open(os.path.join(outDir,'tka_pid_list.txt'),'w')
     for tp in getFiles(csvFileDir):            
         if not tp[1].endswith('.csv'):
             continue
@@ -459,7 +496,9 @@ if __name__ == "__main__":
             break
         p = multiprocessing.Process(target=main, args=(files, i, len(files), cpu_cnt))
         p.start()  
+        pid_list.write("pid: {} and name: {}\n".format(p.pid,p.name))
     thisFile=os.path.abspath(__file__)
     copyFile(thisFile,outDir)
-    res_cnt.close()
+    pid_list.close()
+  
     

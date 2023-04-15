@@ -6,6 +6,7 @@ from distutils.log import error
 
 import os
 import re
+import argparse
 import multiprocessing
 from tokenize import Special
 
@@ -18,6 +19,7 @@ from clang.cindex import TokenKind, TranslationUnit
 
 import sys
 import csv
+csv.field_size_limit(500 * 1024 * 1024)
 
 sys.path.extend(['.','..'])
 from queue import PriorityQueue
@@ -26,31 +28,50 @@ from pack.util import dbgout
 from pack.ast_related import *
 from pack.file_sys import *
 from pack.config import *
+from utils.data import getDefUseKey, getDistMap
 # import pack.ast_related
 
 # TODO
 # mutable arguments
 Errors=None
-outDir = r'out/'
-csvFileDir = sys.argv[1]
-vocabPath = r'out/vocab.txt'
+# outDir = r'out/'
+# csvFileDir = sys.argv[1]
+# vocabPath = r'out/vocab.txt'
 # srcPrefix = r'/home/shared/projects/'
-vl = len(sys.argv)
-if vl > 2:
-    vocabPath = sys.argv[2]
+# workSet={'libgit2','linux','git','h2o'}
+# workSet={'curl','gcc','mysql','protobuf','redis','tmux','the-silver-searcher'}
+workSet={'curl'}
 
-if vl > 3:
-    outDir = sys.argv[3]
-    if not outDir.endswith('/'):
-        outDir += '/'
+parser = argparse.ArgumentParser(description='Auto run arguments')
+parser.add_argument('-voc','--vocab', dest='vocab', type=str, default='', help='Vocab directory')
+parser.add_argument('-i','--input', dest='input', type=str, default='input', help='Input directory')
+parser.add_argument('-o','--output', dest='output', type=str, default='output', help='Output directory')
+parser.add_argument('-abs','--use-abs-path',dest='use_abs_path',action='store_true',help='Use absolute path.')
+parser.add_argument('-reg','--use-reg',dest='use_reg',action='store_true',help='Use regular expr to parse defuse.')
+args = parser.parse_args()
 
-isAbsPath=False # absolute path or not
-if vl>4:
-    isAbsPath=(sys.argv[4]=='full')
+# vl = len(sys.argv)
+# if vl > 2:
+#     vocabPath = sys.argv[2]
 
-useReg=False # use regular expr to parse defuse
-if vl>5:
-    useReg=(sys.argv[5]=='reg')
+# if vl > 3:
+#     outDir = sys.argv[3]
+#     if not outDir.endswith('/'):
+#         outDir += '/'
+
+# isAbsPath=False # absolute path or not
+# if vl>4:
+#     isAbsPath=(sys.argv[4]=='full')
+
+# useReg=False # use regular expr to parse defuse
+# if vl>5:
+#     useReg=(sys.argv[5]=='reg')
+
+csvFileDir=args.input
+vocabPath=args.vocab
+outDir=args.output+'/'
+isAbsPath=args.use_abs_path
+useReg=args.use_reg
 
 # directly add .ast suffix to a c/c++ file
 direct_extend_ast={'mysql'}    
@@ -79,13 +100,15 @@ class DefUse:
         self.relative_path=''
         self.ast_path=''        
         self.which=''
+        self.dist='0'
+        self.extra_msg=''
 
 
 def defuseToRow(defuse):
     scope=defuse.func_scope
     # path=defuse.path.split('/')[-1]
     path=defuse.path
-    ls=[defuse.name,path,defuse.def_line,defuse.alias_type,"%s-%s"%(scope[0],scope[1])]
+    ls=[defuse.name,path,defuse.def_line,defuse.alias_type,"%s-%s"%(scope[0],scope[1]),defuse.dist,defuse.extra_msg]
     for pnt in defuse.use_points:
         # ls.append('"(0;%s;%s)"'%(pnt[0],pnt[1]))
         ls.append('(0;%s;%s)'%(pnt[0],pnt[1]))
@@ -283,7 +306,6 @@ def getDefUse(row,which,label,alias_type):
     return defuse
 
 def main(data):
-# def main(data,s,e,gap):
     global Errors
     print('main begin')
     for tp in data:
@@ -299,7 +321,10 @@ def main(data):
         dbgout('csv path: ' + input_path)
         which = tp[1].split('_',1)[0]
         # rid=tp[1].rfind('.')
+        if which not in workSet:
+            continue
         out_name=tp[1].rsplit('.',1)[0]  
+        # defuseToDist=getDistMap(whichToDistMap[which])
         # debug = open(outDir+out_name+'_dbg.txt', 'w')        
         # pack.ast_related.errors=errors
         Errors = open(outDir+out_name+'_errors.txt', 'w')
@@ -328,67 +353,85 @@ def main(data):
             for row in csv_r:
                 line_id+=1                
                 dbgout("line id: {}",line_id)  
-                Errors.write("row: %s\n"%str(row))              
-                # function='unknown'
-                # defuses.append(DefUse(name, total_path, def_line, function, (0,0), [], label))
-                if useReg:
-                    defuse1=getDefUse(row,which,label,alias_type)
-                    defuse2=getDefUse(row[1:],which,label,alias_type)
-                else:
-                    label=int(row[6])
-                    if len(row)>7:
-                        alias_type=row[7]
-                    defuse1=getDefUse(row,which,label,alias_type)
-                    defuse2=getDefUse(row[3:],which,label,alias_type)
-
-                if not defuse1 or not defuse2:
-                    Errors.write("defuse none for %s at main\n"%str(row))
-                    continue                   
-                dbgout("defuse1.path: " + defuse1.path)                   
-                addPathToTu(defuse1)
-
-                if defuse1.path in mapPathToTu:
-                    tu=mapPathToTu[defuse1.path]
-                    if defuse1.path not in mapPathToMethods:
-                        methods=methodDefs(tu.cursor)
-                        mapPathToMethods[defuse1.path]=methods
+                Errors.write("row: %s\n"%str(row))  
+                try:            
+                    # function='unknown'
+                    # defuses.append(DefUse(name, total_path, def_line, function, (0,0), [], label))
+                    if useReg:
+                        defuse1=getDefUse(row,which,label,alias_type)
+                        defuse2=getDefUse(row[1:],which,label,alias_type)
+                        extra_msg='"'+','.join(row)+'"'
+                        defuse1.extra_msg=extra_msg
                     else:
-                        methods=mapPathToMethods[defuse1.path]
-                else:
-                    tu=None
-                    methods=[]
-                    Errors.write("defuse path %s is not in mapPathToTu at main\n"%(defuse1.path))
+                        label=int(row[6])
+                        # if len(row)>7:
+                        #     alias_type=row[7]
 
-                # assert defuse1.path==defuse2.path , \
-                #     "defuse locations are not equal %s|%s and %s|%s"%(defuse1.path,defuse1.function,defuse2.path,defuse2.function)
-                if defuse1.path!=defuse2.path:
-                    Errors.write("name %s in path: %s != \nname %s in path: %s at main\n"%(defuse1.name,defuse1.path,defuse2.name,defuse2.path))
-                else:
-                    method1=findMethod(defuse1,methods)
-                    method2=findMethod(defuse2,methods)
-                    method=method1 if method1 else method2
-                    if method:
-                        updateDefUse(defuse1,tu,method)                
-                        updateDefUse(defuse2,tu,method)
-               
-                list1=defuseToRow(defuse1)
-                list2=defuseToRow(defuse2)
-                if not defuse1.use_points or not defuse2.use_points:
-                    Errors.write("%s in %s : %d no uses\n"%(defuse1.name, defuse1.path, defuse1.def_line))
-                    Errors.write("%s in %s : %d no uses\n"%(defuse2.name, defuse2.path, defuse2.def_line))
-                else:
-                    # csv_w.writerow(list1)
-                    # csv_w.writerow(list2)
-                    if label==1:
-                        alias_defuses.append(list1)
-                        alias_defuses.append(list2)
+                        defuse1=getDefUse(row,which,label,alias_type)
+                        defuse2=getDefUse(row[3:],which,label,alias_type)
+                        extra_msg='"'+','.join(row)+'"'
+                        defuse1.extra_msg=extra_msg
+                        if len(row)>7:
+                            defuse1.dist=row[7]
+
+                    if not defuse1 or not defuse2:
+                        Errors.write("defuse none for %s at main\n"%str(row))
+                        continue                   
+                    dbgout("defuse1.path: " + defuse1.path)                   
+                    addPathToTu(defuse1)
+
+                    if defuse1.path in mapPathToTu:
+                        tu=mapPathToTu[defuse1.path]
+                        if defuse1.path not in mapPathToMethods:
+                            methods=methodDefs(tu.cursor)
+                            mapPathToMethods[defuse1.path]=methods
+                        else:
+                            methods=mapPathToMethods[defuse1.path]
                     else:
-                        noalias_defuses.append(list1)
-                        noalias_defuses.append(list2)                 
+                        tu=None
+                        methods=[]
+                        Errors.write("defuse path %s is not in mapPathToTu at main\n"%(defuse1.path))
+
+                    # assert defuse1.path==defuse2.path , \
+                    #     "defuse locations are not equal %s|%s and %s|%s"%(defuse1.path,defuse1.function,defuse2.path,defuse2.function)
+                    if defuse1.path!=defuse2.path:
+                        Errors.write("name %s in path: %s != \nname %s in path: %s at main\n"%(defuse1.name,defuse1.path,defuse2.name,defuse2.path))
+                    else:
+                        method1=findMethod(defuse1,methods)
+                        method2=findMethod(defuse2,methods)
+                        method=method1 if method1 else method2
+                        if method:
+                            updateDefUse(defuse1,tu,method)                
+                            updateDefUse(defuse2,tu,method)
+
+                    # defuseKey=getDefUseKey(defuse1,defuse2)
+                    # if defuseKey in defuseToDist:
+                    #     dist=defuseToDist[defuseKey]
+                    #     defuse1.dist=dist
+                    #     defuse2.dist=dist
+                    # print("defuse key and dist")    
+                    # print(defuseKey,'\n',dist)
+
+                    list1=defuseToRow(defuse1)
+                    list2=defuseToRow(defuse2)
+                    if not defuse1.use_points or not defuse2.use_points:
+                        Errors.write("%s in %s : %d no uses\n"%(defuse1.name, defuse1.path, defuse1.def_line))
+                        Errors.write("%s in %s : %d no uses\n"%(defuse2.name, defuse2.path, defuse2.def_line))
+                    else:
+                        # csv_w.writerow(list1)
+                        # csv_w.writerow(list2)
+                        if label==1:
+                            alias_defuses.append(list1)
+                            alias_defuses.append(list2)
+                        else:
+                            noalias_defuses.append(list1)
+                            noalias_defuses.append(list2)   
+                except:
+                    pass # unknown exception              
        
         with open(outDir + out_name + '.csv', 'w', newline='') as csv_file:
             csv_w = csv.writer(csv_file)
-            csv_w.writerow(['Alias_name', 'dir', 'line_Num', 'alias_type', 'Function_Scope', 
+            csv_w.writerow(['Alias_name', 'dir', 'line_Num', 'alias_type', 'Function_Scope', 'distance', 'extra_msg',
                 'User_points: (Position_No, LineNum, Column) instruction_content'])
             csv_w.writerow(['True Alias Pairs: '])           
             csv_w.writerows(alias_defuses)
@@ -403,6 +446,7 @@ if __name__ == "__main__":
         os.makedirs(outDir)    
     files=[]  
     processes=[]  
+    
     cpu_cnt=multiprocessing.cpu_count()
     # cpu_cnt=1
     pid_list=open(os.path.join(outDir,'refine_pid_list.txt'),'w')
@@ -411,7 +455,7 @@ if __name__ == "__main__":
             continue
         print(tp)          
         files.append(tp)
-    for i in range(cpu_cnt):
+    for i in range(cpu_cnt):   
         if i>=len(files):
             break
         p = multiprocessing.Process(target=main, args=(files[i:len(files):cpu_cnt],))
