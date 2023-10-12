@@ -23,3 +23,10 @@ testing arguments:
 -r: restore model parameters
 -tf: the test file path
 ```
+## Anonymous
+```shell
+# train the model
+python GGNNDef_anonymous.py -p 2 --pre_trained_model xxxx.pickle
+# test the model
+python GGNNDef_anonymous.py -p 2 -r yyyy.pickle -tf test_file.json
+```
