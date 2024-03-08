@@ -42,20 +42,20 @@ Fourteen open-source projects are selected to construct CodeSem: Linux Kernel, G
 
 | Projects     | Description                                     | Version | Size (KLoC) |
 | ------------ | ----------------------------------------------- | ------- | ----------- |
-| Linux Kernel | The main component of a Linux operating system. | [6.2.9](https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.2.9.tar.gz)   | 25,416      |
-| MySQL        | A relational database management system.        | [8.0.32](https://github.com/mysql/mysql-server/archive/refs/tags/mysql-8.0.32.tar.gz)  | 4,005       |
-| GCC          | A compiler for the GNU operating system.        | [12.2.0](https://ftp.gnu.org/gnu/gcc/gcc-12.2.0/gcc-12.2.0.tar.gz)  | 10,162      |
-| Git          | A distributed version control system.           | [2.40.0](https://github.com/git/git/archive/refs/tags/v2.40.0.tar.gz)  | 883         |
-| tmux         | A terminal multiplexer.                         | [3.3](https://github.com/tmux/tmux/archive/refs/tags/3.3.tar.gz) | 86          |
-| Redis        | An in-memory key–value database.                | [7.0.10](https://github.com/redis/redis/archive/refs/tags/7.0.10.tar.gz)   | 269         |
-| curl         | A data transferring tool.                       | [8.0.1](https://github.com/curl/curl/archive/refs/tags/curl-8_0_1.tar.gz)  | 319         |
-| LevelDB      | A key-value storage library.                    | [1.23](https://github.com/google/leveldb/archive/refs/tags/1.23.tar.gz)    | 114         |
-| H2O          | An optimized HTTP/1, HTTP/2, HTTP/3 server.     | [2.2.6](https://github.com/h2o/h2o/archive/refs/tags/v2.2.6.tar.gz) |  371         |
-| libgit2      | A cross-platform, linkable library implementation of Git. |  [1.6.3](https://github.com/libgit2/libgit2/archive/refs/tags/v1.6.3.tar.gz) |  255      |
-| The Silver Searcher |   A code-searching tool                  | [2.2.0](https://github.com/ggreer/the_silver_searcher/archive/refs/tags/2.2.0.tar.gz) | 20          |
-| Protocol Buffers|  A cross-platform data format used to serialize structured data. | [22.2](https://github.com/protocolbuffers/protobuf/releases/download/v22.2/protobuf-22.2.tar.gz) |   603     |
+| Linux Kernel | The main component of a Linux operating system. | [5.3.6](https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.3.6.tar.gz) | 18,724 |
+| MySQL        | A relational database management system.        | [8.0.25](https://github.com/mysql/mysql-server/archive/refs/tags/mysql-8.0.25.tar.gz) | 3,595   |
+| GCC          | A compiler for the GNU operating system.        | [10.3.0](https://ftp.gnu.org/gnu/gcc/gcc-10.3.0/gcc-10.3.0.tar.gz) | 9,173 |
+| Git          | A distributed version control system.           | [2.23.1](https://github.com/git/git/archive/refs/tags/v2.23.1.tar.gz) | 684      |
+| tmux         | A terminal multiplexer.                         | [3.3](https://github.com/tmux/tmux/archive/refs/tags/3.3.tar.gz) | 68        |
+| Redis        | An in-memory key–value database.                | [6.2.6](https://github.com/redis/redis/archive/refs/tags/6.2.6.tar.gz) | 206       |
+| curl         | A data transferring tool.                       | [7.79.0](https://github.com/curl/curl/archive/refs/tags/curl-7_79_0.tar.gz) | 254      |
+| LevelDB      | A key-value storage library.                    | [1.23](https://github.com/google/leveldb/archive/refs/tags/1.23.tar.gz)    | 22       |
+| H2O          | An optimized HTTP/1, HTTP/2, HTTP/3 server.     | [2.2.6](https://github.com/h2o/h2o/archive/refs/tags/v2.2.6.tar.gz) |  284     |
+| libgit2      | A cross-platform, linkable library implementation of Git. | [1.4.2](https://github.com/libgit2/libgit2/archive/refs/tags/v1.4.2.tar.gz) |  236    |
+| The Silver Searcher |   A code-searching tool                  | [2.2.0](https://github.com/ggreer/the_silver_searcher/archive/refs/tags/2.2.0.tar.gz) | 6         |
+| Protocol Buffers|  A cross-platform data format used to serialize structured data. | [3.20.0](https://github.com/protocolbuffers/protobuf/archive/refs/tags/v3.20.0.tar.gz) |   650   |
 | aria2        |    A utility for downloading files.             | [1.36.0](https://github.com/aria2/aria2/archive/refs/tags/release-1.36.0.tar.gz) |  136     |
-| fish         |   A user-friendly command line shell.           | [3.6.1](https://github.com/fish-shell/fish-shell/archive/refs/tags/3.6.1.tar.gz) |  520      |
+| fish         |   A user-friendly command line shell.           | [3.4.1](https://github.com/fish-shell/fish-shell/archive/refs/tags/3.4.1.tar.gz) |  407   |
 
 ### Data Details
 We assemble dataset for the following two tasks: alias prediction and equivalence prediction. The structure of the dataset is shown below:
