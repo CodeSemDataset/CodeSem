@@ -4,6 +4,8 @@
 import sys
 import csv
 from csv import reader
+from sklearn.metrics import accuracy_score
+from sklearn.metrics import confusion_matrix
 
 def main():
     args = sys.argv[1:]
